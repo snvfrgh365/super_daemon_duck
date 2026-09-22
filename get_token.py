@@ -4,8 +4,8 @@ from CHRLINE import CHRLINE
 
 # 準備三種目前最常被用來繞過 403 的官方版本號組合
 devices_to_test = [
-    {"device": "DESKTOPWIN", "version": "8.4.1.3286", "os_name": "Windows", "os_version": "10.0.0-NT-x64"},
     {"device": "DESKTOPMAC", "version": "8.4.1.3286", "os_name": "MAC", "os_version": "12.0"},
+    {"device": "DESKTOPWIN", "version": "8.4.1.3286", "os_name": "Windows", "os_version": "10.0.0-NT-x64"},
     {"device": "CHROMEOS", "version": "3.1.2", "os_name": "ChromeOS", "os_version": "120.0"}
 ]
 

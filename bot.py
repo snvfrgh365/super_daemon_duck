@@ -1,47 +1,66 @@
 # bot.py
+# retry
 import os
 import time
+import random
 from CHRLINE import CHRLINE
 import config
 import dashboard
 import auth
 import actions
 from dashboard import safe_get
-from logger import sys_log, error_log, action_log
+from logger import sys_log, error_log, action_log, diagnose_error, format_uptime
+
+CHRLINE_PARAMS = {
+    "device": "DESKTOPMAC",
+    "version": "8.4.1.3286",
+    "os_name": "MAC",
+    "os_version": "12.0",
+}
+
+
+def create_client(token):
+    """Build CHRLINE client with specified token."""
+    return CHRLINE(token, **CHRLINE_PARAMS)
+
 
 def run_bot():
     if not os.path.exists(config.TOKEN_FILE):
-        error_log.error(f"❌ 找不到 {config.TOKEN_FILE}")
+        error_log.error("找不到 %s" % config.TOKEN_FILE)
         return
 
     with open(config.TOKEN_FILE, "r") as f:
         token = f.read().strip()
 
-    sys_log.info("🔗 正在使用本機 Token 連線至 LINE 伺服器...")
+    sys_log.info("正在使用本機 Token 連線至 LINE 伺服器...")
+    cl = None
     try:
-        cl = CHRLINE(
-            token, 
-            device="DESKTOPMAC",
-            version="8.4.1.3286",
-            os_name="MAC",
-            os_version="12.0"
-        )
+        cl = create_client(token)
     except Exception as e:
-        error_log.error(f"❌ 登入失敗: {e}")
-        return
+        error_log.error("登入失敗: %s" % e)
+        # ---- 啟動時 Token 已過期，嘗試用 Refresh Token 續命 ----
+        new_token = auth.try_startup_refresh()
+        if new_token:
+            sys_log.info("使用新 Token 重新連線中...")
+            try:
+                cl = create_client(new_token)
+            except Exception as e2:
+                error_log.error("續命後仍然無法登入: %s" % e2)
+                return
+        else:
+            error_log.error("無法自動續命，請手動重新掃碼取得 Token (python get_token.py)")
+            return
 
     # 開機初始化：印出看板並立刻進行主動清場
     dashboard.print_status_report(cl)
     actions.active_sweep(cl)
-    
-    sys_log.info("🛡️ 防護系統已上線，主迴圈監聽中...")
+
+    sys_log.info("防護系統已上線，主迴圈監聽中...")
     cl.revision = cl.getLastOpRevision()
-    last_log_time = time.time()
 
     import threading
 
     def background_sweep():
-        import random
         while True:
             sleep_time = random.uniform(config.REPORT_INTERVAL_MIN, config.REPORT_INTERVAL_MAX)
             time.sleep(sleep_time)
@@ -49,75 +68,113 @@ def run_bot():
                 dashboard.print_status_report(cl)
                 actions.active_sweep(cl)
             except Exception as e:
-                error_log.error(f"⚠️ 背景巡邏發生異常: {e}")
+                error_log.error("背景巡邏發生異常: %s" % e)
 
-    # 啟動背景巡邏執行緒
+    def proactive_refresh():
+        """每 2~2.5 小時主動 refresh，搶在 LINE session timeout 之前續命。"""
+        while True:
+            sleep_time = random.uniform(config.PROACTIVE_REFRESH_MIN, config.PROACTIVE_REFRESH_MAX)
+            hours = sleep_time / 3600
+            sys_log.info("[主動續命] 下次排程: %.1f 小時後" % hours)
+            time.sleep(sleep_time)
+            try:
+                sys_log.info("[主動續命] 定期 Token 續命排程啟動...")
+                if auth.try_refresh_token(cl):
+                    sys_log.info("[主動續命] Token 已成功延長壽命。")
+                else:
+                    error_log.warning("[主動續命] 續命未成功，將在下次排程重試。")
+            except Exception as e:
+                error_log.error("[主動續命] 發生異常: %s" % e)
+
+    # 啟動背景執行緒
     sweep_thread = threading.Thread(target=background_sweep, daemon=True)
     sweep_thread.start()
+    refresh_thread = threading.Thread(target=proactive_refresh, daemon=True)
+    refresh_thread.start()
+
+    boot_time = time.time()
+    error_streak = 0
 
     while True:
         try:
             # 即時事件監聽 (改用 sync 替代被拔除的 fetchOps)
             try:
                 ops_res = cl.sync(cl.revision)
-                # sync 回傳的是一個 dict，裡面包含 operations
-                ops = safe_get(ops_res, 'operations', 1) or []
+                ops = safe_get(ops_res, "operations", 1) or []
             except Exception as e:
                 if "fetchOps" in str(e) or "sync" in str(e):
-                    # 如果連 sync 都不支援，降級為靜默，純靠 active_sweep
                     ops = []
                 else:
                     raise e
-                    
+
+            error_streak = 0  # 成功一次就重置
+
             for op in ops:
-                cl.revision = max(cl.revision, op[1] if isinstance(op, list) else safe_get(op, 'revision', 1))
-                op_type = op[3] if isinstance(op, list) else safe_get(op, 'type', 3)
+                cl.revision = max(cl.revision, op[1] if isinstance(op, list) else safe_get(op, "revision", 1))
+                op_type = op[3] if isinstance(op, list) else safe_get(op, "type", 3)
 
                 # 攔截群組邀請 (Op 13, 124)
                 if op_type in [13, 124]:
-                    group_id = op[10] if isinstance(op, list) else safe_get(op, 'param1', 10)
-                    param3 = op[12] if isinstance(op, list) else safe_get(op, 'param3', 12)
-                    invited_mids = param3.split('\x1e') if isinstance(param3, str) else (param3 if isinstance(param3, list) else [param3])
-                    
+                    group_id = op[10] if isinstance(op, list) else safe_get(op, "param1", 10)
+                    param3 = op[12] if isinstance(op, list) else safe_get(op, "param3", 12)
+                    sep = "\x1e"
+                    invited_mids = param3.split(sep) if isinstance(param3, str) else (param3 if isinstance(param3, list) else [param3])
+
                     for mid in invited_mids:
-                        if not mid: continue
+                        if not mid:
+                            continue
                         contact = cl.getContact(mid)
                         if contact:
-                            real_name = safe_get(contact, 'displayName', 22)
-                            action_log.info(f"🔍 [即時雷達] 偵測到邀請，被邀者: 「{real_name}」")
-                            
+                            real_name = safe_get(contact, "displayName", 22)
+                            action_log.info("[即時雷達] 偵測到邀請，被邀者: %s" % real_name)
                             if real_name == config.TARGET_NAME:
-                                action_log.warning(f"⚠️ [即時雷達] 警報！目標 [{config.TARGET_NAME}] 被邀請！")
+                                action_log.warning("[即時雷達] 警報！目標 [%s] 被邀請！" % config.TARGET_NAME)
                                 actions.execute_ban(cl, group_id, mid, real_name, "cancel")
 
                 # 發現入群 (Op 17, 130)
                 elif op_type in [17, 130]:
-                    group_id = op[10] if isinstance(op, list) else safe_get(op, 'param1', 10)
-                    joined_mid = op[11] if isinstance(op, list) else safe_get(op, 'param2', 11)
+                    group_id = op[10] if isinstance(op, list) else safe_get(op, "param1", 10)
+                    joined_mid = op[11] if isinstance(op, list) else safe_get(op, "param2", 11)
                     contact = cl.getContact(joined_mid)
-                    
+
                     if contact:
-                        real_name = safe_get(contact, 'displayName', 22)
-                        action_log.info(f"🔍 [即時雷達] 偵測到加入，入群者: 「{real_name}」")
-                        
+                        real_name = safe_get(contact, "displayName", 22)
+                        action_log.info("[即時雷達] 偵測到加入，入群者: %s" % real_name)
                         if real_name == config.TARGET_NAME:
-                            action_log.warning(f"⚠️ [即時雷達] 警報！目標 [{config.TARGET_NAME}] 闖入群組！")
+                            action_log.warning("[即時雷達] 警報！目標 [%s] 闖入群組！" % config.TARGET_NAME)
                             actions.execute_ban(cl, group_id, joined_mid, real_name, "kick")
-                            
+
         except Exception as e:
-            # 發生錯誤（通常是 token 過期引發的 401 拒絕存取）
-            error_log.error(f"⚠️ 主迴圈發生異常: {e}")
-            if auth.try_refresh_token(cl):
-                # 續命成功後，重置 revision，繼續監聽
-                try:
-                    cl.revision = cl.getLastOpRevision()
-                except:
-                    pass
+            error_streak += 1
+            uptime_sec = time.time() - boot_time
+            uptime_str = format_uptime(uptime_sec)
+            diagnosis = diagnose_error(e)
+
+            error_log.error(
+                "[CRASH #%d] %s | reason: %s | code: %s | msg: %s | uptime: %s | exception: %s: %s"
+                % (error_streak, diagnosis["category"], diagnosis["reason"],
+                   diagnosis["code"], diagnosis["message"], uptime_str,
+                   type(e).__name__, e)
+            )
+
+            if diagnosis["is_token_issue"]:
+                error_log.error("[DIAG] Token issue detected, attempting refresh...")
+                if auth.try_refresh_token(cl):
+                    error_streak = 0
+                    try:
+                        cl.revision = cl.getLastOpRevision()
+                    except Exception:
+                        pass
+                else:
+                    error_log.error("[DIAG] Refresh failed, waiting 10s before retry")
+                    time.sleep(10)
             else:
-                # 若無法續命，只能等待 10 秒後再試，避免無意義的洗畫面
-                time.sleep(10)
+                wait = min(10 * error_streak, 60)
+                error_log.warning("[DIAG] Non-token issue, retrying in %ds" % wait)
+                time.sleep(wait)
 
         time.sleep(1)
+
 
 if __name__ == "__main__":
     run_bot()
