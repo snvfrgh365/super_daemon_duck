@@ -142,6 +142,9 @@ def try_refresh_token(cl):
         return False
 
     try:
+        # 先更新冷卻時間，無論成功失敗都進入冷卻，避免狂發請求被鎖
+        LAST_REFRESH_TIME = time.time()
+        
         sys_log.info("🔄 [系統] 偵測到 Token 可能已過期，正在嘗試自動續命...")
         RATR = cl.refreshAccessToken(refresh_token)
         new_token = cl.checkAndGetValue(RATR, "accessToken", 1)
@@ -158,7 +161,6 @@ def try_refresh_token(cl):
         new_refresh = cl.checkAndGetValue(RATR, "refreshToken", 2)
         _save_new_tokens(new_token, new_refresh)
 
-        LAST_REFRESH_TIME = time.time()
         sys_log.info("✅ [系統] Token 自動續命成功！壽命已延長。")
         return True
 
