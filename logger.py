@@ -3,54 +3,119 @@ import logging
 from logging.handlers import TimedRotatingFileHandler
 import os
 
-# 確保 logs 資料夾存在
-LOG_DIR = "logs"
-os.makedirs(LOG_DIR, exist_ok=True)
+# ============================================================
+# Log 目錄結構：按類別分資料夾
+# logs/system/system_2026-09-23.log
+# logs/error/error_2026-09-23.log
+# logs/action/action_2026-09-23.log
+# ============================================================
 
-# 共用輸出格式
+LOG_BASE = "logs"
+LOG_DIRS = {
+    "system": os.path.join(LOG_BASE, "system"),
+    "error":  os.path.join(LOG_BASE, "error"),
+    "action": os.path.join(LOG_BASE, "action"),
+}
+
+for d in LOG_DIRS.values():
+    os.makedirs(d, exist_ok=True)
+
+
+# ============================================================
+# TagFilter：自動注入 [SYS]/[ERR]/[ACT] 標籤和 Emoji 前綴
+# ============================================================
+
+class TagFilter(logging.Filter):
+    """根據 Logger 名稱與等級，自動注入標籤和 Emoji。"""
+
+    TAG_MAP = {
+        "System": "SYS",
+        "Error":  "ERR",
+        "Action": "ACT",
+    }
+
+    EMOJI_MAP = {
+        logging.DEBUG:    "🔍",
+        logging.INFO:     "ℹ️ ",
+        logging.WARNING:  "⚠️",
+        logging.ERROR:    "❌",
+        logging.CRITICAL: "🔥",
+    }
+
+    def filter(self, record):
+        record.tag = f"[{self.TAG_MAP.get(record.name, 'LOG')}]"
+        record.emoji = self.EMOJI_MAP.get(record.levelno, "")
+        return True
+
+
+# ============================================================
+# Formatter & Console Handler
+# ============================================================
+
 formatter = logging.Formatter(
-    fmt="[%(asctime)s] [%(levelname)s] %(message)s",
+    fmt="[%(asctime)s] %(tag)s %(emoji)s %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S"
 )
 
-# 控制台專用設定 (顯示給人類看的)
 console_handler = logging.StreamHandler()
 console_handler.setLevel(logging.INFO)
 console_handler.setFormatter(formatter)
+console_handler.addFilter(TagFilter())
 
-def create_logger(name, filename, level, retention_days):
-    """建立帶有輪轉機制的 Logger"""
+
+# ============================================================
+# Logger 工廠
+# ============================================================
+
+def create_logger(name, category, level, retention_days):
+    """建立帶有分類資料夾與日期輪轉的 Logger。
+
+    Args:
+        name: Logger 名稱 (System / Error / Action)
+        category: 資料夾與檔名前綴 (system / error / action)
+        level: 最低記錄等級
+        retention_days: 保留天數
+    """
     logger = logging.getLogger(name)
     logger.setLevel(level)
-    
-    # 避免重複綁定 handler
+
     if not logger.handlers:
-        file_path = os.path.join(LOG_DIR, filename)
-        
-        # 每天午夜 (midnight) 輪轉一次檔案，保留 retention_days 天的備份
+        log_dir = LOG_DIRS[category]
+        file_path = os.path.join(log_dir, f"{category}")
+
+        # 每天午夜輪轉，檔名格式: system_2026-09-23.log
         file_handler = TimedRotatingFileHandler(
-            filename=file_path,
+            filename=file_path + ".log",
             when="midnight",
             interval=1,
             backupCount=retention_days,
-            encoding="utf-8"
+            encoding="utf-8",
         )
+        file_handler.suffix = "_%Y-%m-%d.log"
+        file_handler.namer = lambda name: name.replace(".log_", "_").replace(".log", "")
         file_handler.setLevel(level)
         file_handler.setFormatter(formatter)
-        
+        file_handler.addFilter(TagFilter())
+
+        logger.addFilter(TagFilter())
         logger.addHandler(file_handler)
         logger.addHandler(console_handler)
-        
+
     return logger
 
-# 1. 系統日常 Log (保留 7 天)
-sys_log = create_logger("System", "system.log", logging.INFO, 7)
 
-# 2. 錯誤 Log (保留 30 天，只記錄 WARNING 以上)
-error_log = create_logger("Error", "error.log", logging.WARNING, 30)
+# ============================================================
+# 建立三個 Logger
+# ============================================================
 
-# 3. 行動 Log (保留 30 天，紀錄所有封鎖、踢人、掃描行動)
-action_log = create_logger("Action", "action.log", logging.INFO, 30)
+# 1. 系統日常 (保留 7 天)
+sys_log = create_logger("System", "system", logging.INFO, 7)
+
+# 2. 錯誤 (保留 30 天，WARNING 以上)
+error_log = create_logger("Error", "error", logging.WARNING, 30)
+
+# 3. 行動紀錄 (保留 30 天)
+action_log = create_logger("Action", "action", logging.INFO, 30)
 
 
 # ============================================================

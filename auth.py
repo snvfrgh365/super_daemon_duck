@@ -11,14 +11,14 @@ REFRESH_COOLDOWN = 300  # 5 分鐘冷卻，避免短時間內瘋狂重試（原�
 def _read_refresh_token():
     """讀取 Refresh Token 檔案，回傳 token 字串或 None。"""
     if not os.path.exists(config.REFRESH_TOKEN_FILE):
-        error_log.error(f"❌ [系統] 找不到 {config.REFRESH_TOKEN_FILE}，無法續命")
+        error_log.error(f"找不到 {config.REFRESH_TOKEN_FILE}，無法續命")
         return None
 
     with open(config.REFRESH_TOKEN_FILE, "r") as f:
         refresh_token = f.read().strip()
 
     if not refresh_token:
-        error_log.error("❌ [系統] Refresh Token 檔案內容為空")
+        error_log.error("Refresh Token 檔案內容為空")
         return None
 
     return refresh_token
@@ -32,7 +32,7 @@ def _check_cooldown():
 
     if elapsed < REFRESH_COOLDOWN:
         remaining = int(REFRESH_COOLDOWN - elapsed)
-        error_log.warning(f"⏳ [系統] 續命冷卻中，{remaining} 秒後才能重試")
+        error_log.warning(f"續命冷卻中，{remaining} 秒後才能重試")
         return False
     return True
 
@@ -47,7 +47,7 @@ def _save_new_tokens(new_access_token, new_refresh_token=None):
     if new_refresh_token:
         with open(config.REFRESH_TOKEN_FILE, "w") as f:
             f.write(new_refresh_token)
-        sys_log.info("🔑 [系統] 新的 Refresh Token 也已一併更新。")
+        sys_log.info("🔑 新的 Refresh Token 也已一併更新。")
 
 
 def try_startup_refresh():
@@ -70,16 +70,16 @@ def try_startup_refresh():
 
     # 讀取已過期的 Token（用於部分初始化 CHRLINE 的連線通道）
     if not os.path.exists(config.TOKEN_FILE):
-        error_log.error(f"❌ [系統] 找不到 {config.TOKEN_FILE}")
+        error_log.error(f"找不到 {config.TOKEN_FILE}")
         return None
     with open(config.TOKEN_FILE, "r") as f:
         expired_token = f.read().strip()
     if not expired_token:
-        error_log.error("❌ [系統] Session Token 檔案內容為空")
+        error_log.error("Session Token 檔案內容為空")
         return None
 
     try:
-        sys_log.info("🔄 [系統] Token 已失效，正在用 Refresh Token 嘗試自動續命...")
+        sys_log.info("🔄 Token 已失效，正在用 Refresh Token 嘗試自動續命...")
 
         from CHRLINE import CHRLINE
 
@@ -111,7 +111,7 @@ def try_startup_refresh():
         new_token = temp_cl.checkAndGetValue(RATR, "accessToken", 1)
 
         if not new_token:
-            error_log.error("❌ [系統] Refresh 回應為空，Refresh Token 可能也已過期，請重新掃碼")
+            error_log.error("Refresh 回應為空，Refresh Token 可能也已過期，請重新掃碼")
             return None
 
         # 檢查是否有回傳新的 Refresh Token (有些版本的 API 會 rotate)
@@ -119,11 +119,11 @@ def try_startup_refresh():
         _save_new_tokens(new_token, new_refresh)
 
         LAST_REFRESH_TIME = time.time()
-        sys_log.info("✅ [系統] 啟動續命成功！已取得新 Access Token。")
+        sys_log.info("✅ 啟動續命成功！已取得新 Access Token。")
         return new_token
 
     except Exception as e:
-        error_log.error(f"❌ [系統] 啟動續命失敗 (可能 Refresh Token 也已過期，請重新掃碼): {e}")
+        error_log.error(f"啟動續命失敗 (可能 Refresh Token 也已過期，請重新掃碼): {e}")
         return None
 
 
@@ -145,12 +145,12 @@ def try_refresh_token(cl):
         # 先更新冷卻時間，無論成功失敗都進入冷卻，避免狂發請求被鎖
         LAST_REFRESH_TIME = time.time()
         
-        sys_log.info("🔄 [系統] 偵測到 Token 可能已過期，正在嘗試自動續命...")
+        sys_log.info("🔄 偵測到 Token 可能已過期，正在嘗試自動續命...")
         RATR = cl.refreshAccessToken(refresh_token)
         new_token = cl.checkAndGetValue(RATR, "accessToken", 1)
 
         if not new_token:
-            error_log.error("❌ [系統] Refresh 回應為空，Refresh Token 可能已過期，請重新掃碼")
+            error_log.error("Refresh 回應為空，Refresh Token 可能已過期，請重新掃碼")
             return False
 
         # 更新 cl 的 Token 並重建連線通道
@@ -161,9 +161,9 @@ def try_refresh_token(cl):
         new_refresh = cl.checkAndGetValue(RATR, "refreshToken", 2)
         _save_new_tokens(new_token, new_refresh)
 
-        sys_log.info("✅ [系統] Token 自動續命成功！壽命已延長。")
+        sys_log.info("✅ Token 自動續命成功！壽命已延長。")
         return True
 
     except Exception as e:
-        error_log.error(f"❌ [系統] 自動續命失敗 (可能 Refresh Token 已經過期，請重新掃碼): {e}")
+        error_log.error(f"自動續命失敗 (可能 Refresh Token 已經過期，請重新掃碼): {e}")
     return False

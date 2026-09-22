@@ -52,7 +52,8 @@ def run_bot():
             return
 
     # 開機初始化：印出看板並立刻進行主動清場
-    dashboard.print_status_report(cl)
+    boot_time = time.time()
+    dashboard.print_status_report(cl, boot_time)
     actions.active_sweep(cl)
 
     sys_log.info("防護系統已上線，主迴圈監聽中...")
@@ -65,7 +66,7 @@ def run_bot():
             sleep_time = random.uniform(config.REPORT_INTERVAL_MIN, config.REPORT_INTERVAL_MAX)
             time.sleep(sleep_time)
             try:
-                dashboard.print_status_report(cl)
+                dashboard.print_status_report(cl, boot_time)
                 actions.active_sweep(cl)
             except Exception as e:
                 error_log.error("背景巡邏發生異常: %s" % e)
@@ -92,7 +93,6 @@ def run_bot():
     refresh_thread = threading.Thread(target=proactive_refresh, daemon=True)
     refresh_thread.start()
 
-    boot_time = time.time()
     error_streak = 0
 
     while True:
