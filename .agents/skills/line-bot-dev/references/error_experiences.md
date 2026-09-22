@@ -29,7 +29,7 @@ When working on this LINE Bot project using CHRLINE, be aware of the following k
 ## 5. 403 Forbidden on Login (Device Spoofing)
 - **Symptom:** Getting a `403 Forbidden` error when trying to generate a token or log in.
 - **Root Cause:** LINE officially blocks certain default CHRLINE device characteristics on their server-side.
-- **Solution:** Spoof the device characteristics in the `CHRLINE` constructor. Testing has shown that `device="DESKTOPMAC", version="8.4.1.3286", os_name="MAC", os_version="12.0"` has a higher success rate of bypassing the block.
+- **Solution:** Spoof the device characteristics in the `CHRLINE` constructor. Testing has shown that `device="DESKTOPMAC", version="8.4.1.3286", os_name="MAC", os_version="12.0"` has a higher success rate. If MAC fails, `device="IOSIPAD", version="13.4.0", os_name="iOS", os_version="16.0.0"` is a strong alternative.
 
 ## 6. Chat V2 API Migration (`kickoutFromGroup` errors)
 - **Symptom:** Calling `kickoutFromGroup(group_id, target_mid)` raises `TalkService.kickoutFromGroup() takes 1 positional argument but 3 were given` or similar signature errors.
@@ -42,3 +42,13 @@ When working on this LINE Bot project using CHRLINE, be aware of the following k
 ## 7. Continuous Logging for the Next Model
 - As the bot evolves, whenever you encounter a new LINE API error code, unexpected ban, or token issue, **document it here**. 
 - Always ensure the `logger.py` diagnosis logic (`_diagnose_error`) is updated when a new error code is discovered so that future logs are human-readable.
+
+## 8. False Positive Login (Code 100 / Code 1 / Code 4)
+- **Symptom:** You scan the QR code, enter the PIN, and your phone displays a push notification saying "Login successful (Mac/iPad)". However, the terminal immediately crashes with `Code: 100 (暫時無法進行認證)`, `Code: 1`, or `Code: 4`, and no token is generated.
+- **Root Cause:** The account or IP is in a security cooldown (often due to previous spamming or bot-like behavior). LINE allows the primary auth (PIN) to pass, but the server firewall kicks the connection when CHRLINE attempts the secondary E2EE key exchange.
+- **Solution:** Stop trying immediately (further attempts will worsen the ban). Either change your network IP (e.g., use a mobile hotspot) or wait 12-24 hours for the server cooldown to reset. Modifying code cannot bypass this server-side block.
+
+## 9. Incomplete Event Polling in Secondary Mode (Delayed Bans)
+- **Symptom:** The bot does not react instantly (in milliseconds) to someone joining a group. It only takes action when the periodic dashboard updates.
+- **Root Cause:** The bot operates in `cmode: SECONDARY`. LINE servers often filter out or fail to push group membership change events (Op 13, 17, 124, 130) via `cl.sync()` to secondary devices, as they assume the primary mobile device handles them.
+- **Solution:** Do not rely solely on `cl.sync()` for group defense. The `active_sweep` polling loop (which actively queries `getAllChatMids` -> `getChats(withMembers=True)` -> `getContacts` every 3-5 seconds) is mandatory to guarantee target detection.
