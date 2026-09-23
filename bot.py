@@ -79,34 +79,9 @@ def run_bot():
             except Exception as e:
                 error_log.error("背景巡邏發生異常: %s" % e)
 
-    def proactive_refresh():
-        """每 2~2.5 小時主動 refresh，搶在 LINE session timeout 之前續命。"""
-        while True:
-            sleep_time = random.uniform(config.PROACTIVE_REFRESH_MIN, config.PROACTIVE_REFRESH_MAX)
-            hours = sleep_time / 3600
-            sys_log.info("[主動續命] 下次排程: %.1f 小時後" % hours)
-            time.sleep(sleep_time)
-            
-            # 進入重試迴圈
-            while True:
-                try:
-                    sys_log.info("[主動續命] 定期 Token 續命排程啟動...")
-                    if auth.try_refresh_token(cl):
-                        sys_log.info("[主動續命] Token 已成功延長壽命。")
-                        break  # 成功就跳出重試迴圈，回去睡 2.5 小時
-                    else:
-                        error_log.warning("[主動續命] 續命未成功，5 分鐘後將進行重試...")
-                except Exception as e:
-                    error_log.error("[主動續命] 發生異常: %s，5 分鐘後將進行重試..." % e)
-                
-                # 失敗的話，睡 5 分鐘再試一次
-                time.sleep(300)
-
-    # 啟動背景執行緒
+    # 啟動背景巡邏執行緒
     sweep_thread = threading.Thread(target=background_sweep, daemon=True)
     sweep_thread.start()
-    refresh_thread = threading.Thread(target=proactive_refresh, daemon=True)
-    refresh_thread.start()
 
     error_streak = 0
 
