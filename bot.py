@@ -51,6 +51,14 @@ def run_bot():
             error_log.error("無法自動續命，請手動重新掃碼取得 Token (python get_token.py)")
             return
 
+    # [新增] 開機強制執行一次續命，確保獲得完整的 3 小時壽命
+    sys_log.info("啟動【開機強制續命】機制，確保 Token 壽命重置...")
+    auth.LAST_REFRESH_TIME = 0  # 忽略開機時可能的冷卻限制
+    if auth.try_refresh_token(cl):
+        sys_log.info("✅ 開機強制續命成功！")
+    else:
+        error_log.warning("⚠️ 開機強制續命失敗，將先使用原 Token 繼續執行。")
+
     # 開機初始化：印出看板並立刻進行主動清場
     boot_time = time.time()
     dashboard.print_status_report(cl, boot_time)
@@ -78,14 +86,21 @@ def run_bot():
             hours = sleep_time / 3600
             sys_log.info("[主動續命] 下次排程: %.1f 小時後" % hours)
             time.sleep(sleep_time)
-            try:
-                sys_log.info("[主動續命] 定期 Token 續命排程啟動...")
-                if auth.try_refresh_token(cl):
-                    sys_log.info("[主動續命] Token 已成功延長壽命。")
-                else:
-                    error_log.warning("[主動續命] 續命未成功，將在下次排程重試。")
-            except Exception as e:
-                error_log.error("[主動續命] 發生異常: %s" % e)
+            
+            # 進入重試迴圈
+            while True:
+                try:
+                    sys_log.info("[主動續命] 定期 Token 續命排程啟動...")
+                    if auth.try_refresh_token(cl):
+                        sys_log.info("[主動續命] Token 已成功延長壽命。")
+                        break  # 成功就跳出重試迴圈，回去睡 2.5 小時
+                    else:
+                        error_log.warning("[主動續命] 續命未成功，5 分鐘後將進行重試...")
+                except Exception as e:
+                    error_log.error("[主動續命] 發生異常: %s，5 分鐘後將進行重試..." % e)
+                
+                # 失敗的話，睡 5 分鐘再試一次
+                time.sleep(300)
 
     # 啟動背景執行緒
     sweep_thread = threading.Thread(target=background_sweep, daemon=True)
