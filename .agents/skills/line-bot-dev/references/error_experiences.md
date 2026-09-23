@@ -2,11 +2,11 @@
 
 When working on this LINE Bot project using CHRLINE, be aware of the following known issues, error patterns, and API quirks.
 
-## 1. Session Idle Timeout (Code 8: `V3_TOKEN_CLIENT_LOGGED_OUT`)
-- **Symptom:** The bot runs normally for roughly 3 hours and then suddenly gets forced out with a `V3_TOKEN_CLIENT_LOGGED_OUT` (Code 8) error.
-- **Root Cause:** This is often not because of a banned account, but an **idle timeout** on the session enforced by LINE's servers. The session dies if it's not refreshed.
-- **Solution:** We implemented a `proactive_refresh` thread in `bot.py` that refreshes the access token every 2 to 2.5 hours randomly (`config.PROACTIVE_REFRESH_MIN` and `MAX`).
-- **Debugging Note:** Never rely on the token surviving forever just because its stated lifespan is 30 days. The *session* is much shorter.
+## 1. Session Idle Timeout (Code 8: `V3_TOKEN_CLIENT_LOGGED_OUT`) & Auto-Recovery
+- **Symptom:** The bot runs normally for roughly 2.5 hours and then suddenly gets forced out with a `V3_TOKEN_CLIENT_LOGGED_OUT` (Code 8) error.
+- **Root Cause:** This is an **idle timeout** enforced by LINE's servers. A single Access Token session/connection has a hard lifespan of ~2-3 hours before the server terminates it.
+- **The Old (Wrong) Solution:** We used to run a `proactive_refresh` thread every 2 hours to get a new token *before* the crash. **This is an anti-pattern.** Calling `refreshAccessToken` does NOT extend the lifespan of the *current* blocking connection (e.g. `cl.sync()`). It just gets a new token while the old connection still dies 30 minutes later. Worse, it triggers the API cooldown, which blocks the script from refreshing when it actually crashes!
+- **The Correct Solution:** Delete `proactive_refresh` entirely. Let the script crash! When `Code 8` occurs, catch it in the main loop's `except Exception` block, identify it via `diagnose_error`, and call `cl.refreshAccessToken()`. **The Refresh Token remains fully valid even after the Access Token's session dies.** The bot will instantly fetch a new Access Token, rebuild the connection, and recover in milliseconds with zero downtime.
 
 ## 2. Token Refresh Loops
 - **Symptom:** The bot spams the LINE servers with refresh attempts every few seconds.
