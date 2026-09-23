@@ -41,10 +41,11 @@ def _save_new_tokens(new_access_token, new_refresh_token=None):
     """將新的 Token 寫回檔案，確保下次開機也能用。"""
     os.makedirs(os.path.dirname(config.TOKEN_FILE) or ".", exist_ok=True)
 
-    with open(config.TOKEN_FILE, "w") as f:
-        f.write(new_access_token)
+    if isinstance(new_access_token, str) and new_access_token:
+        with open(config.TOKEN_FILE, "w") as f:
+            f.write(new_access_token)
 
-    if new_refresh_token:
+    if isinstance(new_refresh_token, str) and new_refresh_token:
         with open(config.REFRESH_TOKEN_FILE, "w") as f:
             f.write(new_refresh_token)
         sys_log.info("🔑 新的 Refresh Token 也已一併更新。")
