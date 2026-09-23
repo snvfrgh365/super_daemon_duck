@@ -23,8 +23,8 @@ def extract_all_user_mids(obj):
     """暴力搜索器：無差別遞迴掃描封包內所有隱藏的 LINE 使用者 MID"""
     found = set()
     if isinstance(obj, str):
-        # LINE 的個人 MID 永遠是 33 個字元且以 'u' 開頭
-        if len(obj) == 33 and obj.startswith('u'):
+        # LINE 的 MID 通常長度為 33，且以 u, c, r 開頭 (u=User, c=Channel, r=Room)
+        if len(obj) == 33 and obj[0] in ('u', 'c', 'r'):
             found.add(obj)
     elif isinstance(obj, dict):
         for k, v in obj.items():
@@ -103,7 +103,7 @@ def _print_member_table(members):
     """
     NUM_W = 4    # 序號欄寬度
     NAME_W = 18  # 名稱欄寬度
-    UID_W = 33   # UID 欄寬度
+    UID_W = 35   # UID 欄寬度 (33字元 + 前後留白)
 
     # 表頭
     print(f"     ┌{'─' * NUM_W}┬{'─' * NAME_W}┬{'─' * UID_W}┐")
@@ -117,10 +117,10 @@ def _print_member_table(members):
 
         # 目標高亮
         if name == config.TARGET_NAME:
-            uid_str = _pad(f" {mid_str}", UID_W)
+            uid_str = _pad(f" {mid_str} ", UID_W)
             print(f"     │{num_str}│{name_str}│{uid_str}│ ← 🚨 目標！")
         else:
-            uid_str = _pad(f" {mid_str}", UID_W)
+            uid_str = _pad(f" {mid_str} ", UID_W)
             print(f"     │{num_str}│{name_str}│{uid_str}│")
 
     # 表尾
@@ -181,8 +181,9 @@ def print_status_report(cl, boot_time=None):
                     if not mids:
                         mids = extract_all_user_mids(chat)
 
-                    # 取得真名 + MID 配對
-                    members = []
+                    # 先建立預設清單，名字全部預設為 "官方帳號 / 未知"
+                    members_dict = {str(m): "官方帳號 / 未知" for m in mids}
+
                     if mids:
                         contacts_res = cl.getContacts(mids)
                         contacts = safe_get(contacts_res, 'contacts', 1)
@@ -192,9 +193,13 @@ def print_status_report(cl, boot_time=None):
                             contacts = list(contacts)
 
                         for c in contacts:
-                            name = safe_get(c, 'displayName', 22) or "未知"
-                            mid = safe_get(c, 'mid', 1) or safe_get(c, 'contactMid', 1) or "?"
-                            members.append((name, str(mid)))
+                            name = safe_get(c, 'displayName', 22)
+                            mid = safe_get(c, 'mid', 1) or safe_get(c, 'contactMid', 1)
+                            if mid and name:
+                                members_dict[str(mid)] = name
+
+                    # 轉為 (name, mid) 格式
+                    members = [(name, mid) for mid, name in members_dict.items()]
 
                     print(f"\n  {i}. 🏷️  {g_name}（{len(members)} 人）")
 
