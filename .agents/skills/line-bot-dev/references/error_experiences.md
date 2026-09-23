@@ -52,3 +52,8 @@ When working on this LINE Bot project using CHRLINE, be aware of the following k
 - **Symptom:** The bot does not react instantly (in milliseconds) to someone joining a group. It only takes action when the periodic dashboard updates.
 - **Root Cause:** The bot operates in `cmode: SECONDARY`. LINE servers often filter out or fail to push group membership change events (Op 13, 17, 124, 130) via `cl.sync()` to secondary devices, as they assume the primary mobile device handles them.
 - **Solution:** Do not rely solely on `cl.sync()` for group defense. The `active_sweep` polling loop (which actively queries `getAllChatMids` -> `getChats(withMembers=True)` -> `getContacts` every 3-5 seconds) is mandatory to guarantee target detection.
+
+## 10. Unvalidated Integer Types from API Responses (Crashes)
+- **Symptom:** The bot crashes with `write() argument must be str, not int` in `auth.py`, or similar type errors when fetching contacts in `bot.py` or logging.
+- **Root Cause:** CHRLINE's `checkAndGetValue` and the `ops` (operations) array often return integer error codes or timestamps when a request fails or when Thrift improperly assumes a type. If you assume `accessToken`, `refreshToken`, or `mid` are always strings, passing an integer to `f.write()` or `cl.getContact()` will cause a hard crash.
+- **Solution:** Always validate that tokens are strings using `isinstance(token, str)` before saving. For MIDs extracted from ops (like `joined_mid` or `invited_mids`), explicitly cast them to strings `str(mid)` before passing them into other CHRLINE API methods like `getContact` or `deleteOtherFromChat`, and check for `None` to prevent passing `"None"`.

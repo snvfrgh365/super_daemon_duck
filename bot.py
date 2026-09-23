@@ -123,7 +123,7 @@ def run_bot():
                     for mid in invited_mids:
                         if not mid:
                             continue
-                        contact = cl.getContact(mid)
+                        contact = cl.getContact(str(mid))
                         if contact:
                             real_name = safe_get(contact, "displayName", 22)
                             action_log.info("[即時雷達] 偵測到邀請，被邀者: %s" % real_name)
@@ -135,7 +135,11 @@ def run_bot():
                 elif op_type in [17, 130]:
                     group_id = op[10] if isinstance(op, list) else safe_get(op, "param1", 10)
                     joined_mid = op[11] if isinstance(op, list) else safe_get(op, "param2", 11)
-                    contact = cl.getContact(joined_mid)
+                    
+                    if not joined_mid:
+                        continue
+                        
+                    contact = cl.getContact(str(joined_mid))
 
                     if contact:
                         real_name = safe_get(contact, "displayName", 22)

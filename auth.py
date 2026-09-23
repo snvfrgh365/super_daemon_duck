@@ -114,6 +114,10 @@ def try_startup_refresh():
         if not new_token:
             error_log.error("Refresh 回應為空，Refresh Token 可能也已過期，請重新掃碼")
             return None
+            
+        if not isinstance(new_token, str):
+            error_log.error(f"Refresh 回應異常: 取得的 Token 非字串 (值為 {new_token})，可能伺服器回傳了錯誤代碼。")
+            return None
 
         # 檢查是否有回傳新的 Refresh Token (有些版本的 API 會 rotate)
         new_refresh = temp_cl.checkAndGetValue(RATR, "refreshToken", 2)
@@ -152,6 +156,10 @@ def try_refresh_token(cl):
 
         if not new_token:
             error_log.error("Refresh 回應為空，Refresh Token 可能已過期，請重新掃碼")
+            return False
+            
+        if not isinstance(new_token, str):
+            error_log.error(f"Refresh 回應異常: 取得的 Token 非字串 (值為 {new_token})，可能伺服器回傳了錯誤代碼。")
             return False
 
         # 更新 cl 的 Token 並重建連線通道
