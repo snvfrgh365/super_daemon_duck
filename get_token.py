@@ -28,13 +28,26 @@ for d in devices_to_test:
         print("👉 你的專屬 Access Token 是：")
         print(cl.authToken)
         
-        if hasattr(cl, 'refreshToken') and cl.refreshToken:
+        # 嘗試取得 Refresh Token
+        r_token = getattr(cl, 'refreshToken', None)
+        if r_token:
             print("\n👉 你的專屬 Refresh Token 是：")
-            print(cl.refreshToken)
+            print(r_token)
             
-        print("\n✅ 請將 Access Token 複製到 tokens/session_token.txt")
-        if hasattr(cl, 'refreshToken') and cl.refreshToken:
-            print("✅ 請將 Refresh Token 複製到 tokens/refresh_token.txt")
+        print("\n✅ 正在自動將 Token 儲存至檔案...")
+        import os
+        import config
+        os.makedirs(os.path.dirname(config.TOKEN_FILE) or ".", exist_ok=True)
+        
+        with open(config.TOKEN_FILE, "w") as f:
+            f.write(cl.authToken)
+            
+        if r_token:
+            with open(config.REFRESH_TOKEN_FILE, "w") as f:
+                f.write(r_token)
+            print(f"✅ 已成功寫入 {config.TOKEN_FILE} 與 {config.REFRESH_TOKEN_FILE}")
+        else:
+            print(f"✅ 已成功寫入 {config.TOKEN_FILE} (本次登入未取得 Refresh Token，可能需要手動貼上)")
             
         success = True
         break  # 成功就跳出迴圈

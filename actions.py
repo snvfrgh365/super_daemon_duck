@@ -42,12 +42,16 @@ def active_sweep(cl):
     from dashboard import safe_get, extract_all_user_mids
     try:
         chat_res = cl.getAllChatMids()
-        gids = safe_get(chat_res, 'memberChatMids', 1) or chat_res
+        gids = safe_get(chat_res, 'memberChatMids', 1)
+        if gids is None:
+            gids = chat_res
         if not isinstance(gids, list): gids = list(gids)
         if not gids: return
 
         chats_res = cl.getChats(gids, withMembers=True)
-        chats = safe_get(chats_res, 'chats', 1) or chats_res
+        chats = safe_get(chats_res, 'chats', 1)
+        if chats is None:
+            chats = chats_res
         if not isinstance(chats, list): chats = list(chats)
 
         for chat in chats:

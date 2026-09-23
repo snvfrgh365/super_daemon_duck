@@ -57,3 +57,22 @@ When working on this LINE Bot project using CHRLINE, be aware of the following k
 - **Symptom:** The bot crashes with `write() argument must be str, not int` in `auth.py`, or similar type errors when fetching contacts in `bot.py` or logging.
 - **Root Cause:** CHRLINE's `checkAndGetValue` and the `ops` (operations) array often return integer error codes or timestamps when a request fails or when Thrift improperly assumes a type. If you assume `accessToken`, `refreshToken`, or `mid` are always strings, passing an integer to `f.write()` or `cl.getContact()` will cause a hard crash.
 - **Solution:** Always validate that tokens are strings using `isinstance(token, str)` before saving. For MIDs extracted from ops (like `joined_mid` or `invited_mids`), explicitly cast them to strings `str(mid)` before passing them into other CHRLINE API methods like `getContact` or `deleteOtherFromChat`, and check for `None` to prevent passing `"None"`.
+
+## 11. `safe_get` Fallback Trap on Empty Lists (`[]`)
+- **Symptom:** `dashboard.py` or `actions.py` iterates over integer keys (e.g., `1`, `2`) instead of actual MIDs, crashing or returning empty "Unknown" groups, even when the bot is in 0 groups.
+- **Root Cause:** The LINE server might return empty lists (e.g., `getAllChatMids()` -> `{1: [], 2: []}`). Using `gids = safe_get(chat_res, 'memberChatMids', 1) or chat_res` triggers the `or chat_res` fallback because Python treats an empty list `[]` as falsy. As a result, the script falls back to parsing the parent dictionary `{1: [], 2: []}`, treating the dictionary keys `1` and `2` as group IDs!
+- **Solution:** Never use `or fallback` when extracting potentially empty lists or dicts from Thrift payloads. Always use explicit `is None` checks:
+  ```python
+  gids = safe_get(chat_res, 'memberChatMids', 1)
+  if gids is None:
+      gids = chat_res
+  ```
+
+## 12. `getProfile()` Returns a Parsed Dictionary, Not a Thrift List
+- **Symptom:** Code expecting a Thrift object uses `checkAndGetValue(profile, "displayName", 20)` but gets `None`, making it seem like the API call failed or the Token is invalid.
+- **Root Cause:** Unlike other CHRLINE APIs that return raw Thrift tuples/lists, `cl.getProfile()` returns a completely parsed Python dictionary with integer keys (e.g., `{1: 'mid...', 20: 'displayName...'}`).
+- **Solution:** Do not use `checkAndGetValue()` on the `getProfile()` response. Directly access the dictionary using integer keys:
+  ```python
+  profile = cl.getProfile()
+  name = profile.get(20) if isinstance(profile, dict) else "未知"
+  ```

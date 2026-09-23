@@ -138,7 +138,9 @@ def print_status_report(cl, boot_time=None):
     try:
         # 1. 取得群組 IDs
         chat_res = cl.getAllChatMids()
-        gids = safe_get(chat_res, 'memberChatMids', 1) or chat_res
+        gids = safe_get(chat_res, 'memberChatMids', 1)
+        if gids is None:
+            gids = chat_res
         if not isinstance(gids, list):
             gids = list(gids)
 
@@ -154,7 +156,9 @@ def print_status_report(cl, boot_time=None):
             except Exception:
                 chats_res = cl.getChats(gids)
 
-            chats = safe_get(chats_res, 'chats', 1) or chats_res
+            chats = safe_get(chats_res, 'chats', 1)
+            if chats is None:
+                chats = chats_res
             if not isinstance(chats, list):
                 chats = list(chats)
 
@@ -164,9 +168,9 @@ def print_status_report(cl, boot_time=None):
 
                     # 解析成員 MID
                     mids = []
-                    extra = safe_get(chat, 'extra', 5)
+                    extra = safe_get(chat, 'extra', 8)
                     group_extra = safe_get(extra, 'groupExtra', 1) if extra else None
-                    member_mids = safe_get(group_extra, 'memberMids', 1) if group_extra else None
+                    member_mids = safe_get(group_extra, 'memberMids', 4) if group_extra else None
 
                     if isinstance(member_mids, dict):
                         mids = list(member_mids.keys())
@@ -181,7 +185,9 @@ def print_status_report(cl, boot_time=None):
                     members = []
                     if mids:
                         contacts_res = cl.getContacts(mids)
-                        contacts = safe_get(contacts_res, 'contacts', 1) or contacts_res
+                        contacts = safe_get(contacts_res, 'contacts', 1)
+                        if contacts is None:
+                            contacts = contacts_res
                         if not isinstance(contacts, list):
                             contacts = list(contacts)
 
