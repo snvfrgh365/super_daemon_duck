@@ -118,6 +118,9 @@ def run_bot():
                             real_name = safe_get(contact, "displayName", 22)
                             action_log.info("[即時雷達] 偵測到邀請，被邀者: %s" % real_name)
                             if real_name == config.TARGET_NAME:
+                                bot_mid = str(getattr(cl.profile, "mid", "")) if hasattr(cl, "profile") else ""
+                                if str(mid) == bot_mid:
+                                    continue
                                 action_log.warning("[即時雷達] 警報！目標 [%s] 被邀請！" % config.TARGET_NAME)
                                 actions.execute_ban(cl, group_id, mid, real_name, "cancel")
 
@@ -135,6 +138,9 @@ def run_bot():
                         real_name = safe_get(contact, "displayName", 22)
                         action_log.info("[即時雷達] 偵測到加入，入群者: %s" % real_name)
                         if real_name == config.TARGET_NAME:
+                            bot_mid = str(getattr(cl.profile, "mid", "")) if hasattr(cl, "profile") else ""
+                            if str(joined_mid) == bot_mid:
+                                continue
                             action_log.warning("[即時雷達] 警報！目標 [%s] 闖入群組！" % config.TARGET_NAME)
                             actions.execute_ban(cl, group_id, joined_mid, real_name, "kick")
 

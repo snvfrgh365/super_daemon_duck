@@ -1,6 +1,6 @@
 # config.py
 
-TARGET_NAME = "Super_Duck!"
+TARGET_NAME = "張興華"
 TOKEN_FILE = "tokens/session_token.txt"
 REFRESH_TOKEN_FILE = "tokens/refresh_token.txt"
 

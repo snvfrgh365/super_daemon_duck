@@ -102,29 +102,37 @@ def _print_member_table(members):
         members: list of (name, mid) tuples
     """
     NUM_W = 4    # 序號欄寬度
-    NAME_W = 18  # 名稱欄寬度
-    UID_W = 35   # UID 欄寬度 (33字元 + 前後留白)
+    NAME_W = 45  # 名稱欄寬度 (加長以容納曾用名)
 
     # 表頭
-    print(f"     ┌{'─' * NUM_W}┬{'─' * NAME_W}┬{'─' * UID_W}┐")
-    print(f"     │{_pad(' # ', NUM_W)}│{_pad(' 名稱', NAME_W)}│{_pad(' UID', UID_W)}│")
-    print(f"     ├{'─' * NUM_W}┼{'─' * NAME_W}┼{'─' * UID_W}┤")
+    print(f"     ┌{'─' * NUM_W}┬{'─' * NAME_W}┐")
+    print(f"     │{_pad(' # ', NUM_W)}│{_pad(' 名稱 (曾用名)', NAME_W)}│")
+    print(f"     ├{'─' * NUM_W}┼{'─' * NAME_W}┤")
 
-    for idx, (name, mid) in enumerate(members, 1):
+    for idx, (name, history, mid) in enumerate(members, 1):
         num_str = _pad(f" {idx:>2} ", NUM_W)
-        name_str = _pad(f" {name}", NAME_W)
-        mid_str = mid or "?"
+        
+        # 組合顯示名稱與歷史紀錄
+        display_name = name
+        if len(history) > 1:
+            past_names = " -> ".join(history[:-1])
+            display_name = f"{name} (曾用: {past_names})"
+            
+        # 如果超出寬度，強行截斷避免排版跑掉
+        display_width = _display_width(display_name)
+        if display_width > NAME_W - 2:
+            display_name = display_name[:NAME_W - 6] + "..."
+            
+        name_str = _pad(f" {display_name}", NAME_W)
 
-        # 目標高亮
+        # 目標高亮 (保留內部使用 mid 來高亮的邏輯，但不再印出 mid)
         if name == config.TARGET_NAME:
-            uid_str = _pad(f" {mid_str} ", UID_W)
-            print(f"     │{num_str}│{name_str}│{uid_str}│ ← 🚨 目標！")
+            print(f"     │{num_str}│{name_str}│ ← 🚨 目標！")
         else:
-            uid_str = _pad(f" {mid_str} ", UID_W)
-            print(f"     │{num_str}│{name_str}│{uid_str}│")
+            print(f"     │{num_str}│{name_str}│")
 
     # 表尾
-    print(f"     └{'─' * NUM_W}┴{'─' * NAME_W}┴{'─' * UID_W}┘")
+    print(f"     └{'─' * NUM_W}┴{'─' * NAME_W}┘")
 
 
 # ============================================================
@@ -198,8 +206,15 @@ def print_status_report(cl, boot_time=None):
                             if mid and name:
                                 members_dict[str(mid)] = name
 
-                    # 轉為 (name, mid) 格式
-                    members = [(name, mid) for mid, name in members_dict.items()]
+                    # 更新並載入 UID 歷史資料庫
+                    from uid_db import update_uid_db
+                    db = update_uid_db(members_dict)
+
+                    # 轉為 (name, history, mid) 格式
+                    members = []
+                    for mid, current_name in members_dict.items():
+                        history = db.get(str(mid), [current_name])
+                        members.append((current_name, history, str(mid)))
 
                     print(f"\n  {i}. 🏷️  {g_name}（{len(members)} 人）")
 
