@@ -63,14 +63,8 @@ def run_bot():
             error_log.error("無法自動續命，請手動重新掃碼取得 Token (python get_token.py)")
             return
 
-    # [新增] 開機強制執行一次續命，確保獲得完整的 3 小時壽命
-    sys_log.info("啟動【開機強制續命】機制，確保 Token 壽命重置...")
-    auth.LAST_REFRESH_TIME = 0  # 忽略開機時可能的冷卻限制
-    if auth.try_refresh_token(cl):
-        sys_log.info("✅ 開機強制續命成功！")
-    else:
-        error_log.warning("⚠️ 開機強制續命失敗，將先使用原 Token 繼續執行。")
-
+    sys_log.info("✅ 登入成功！")
+    
     # 開機初始化：立刻進行主動清場，再印出看板
     boot_time = time.time()
     actions.active_sweep(cl)

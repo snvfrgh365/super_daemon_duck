@@ -120,7 +120,13 @@ def try_startup_refresh():
             return None
 
         # 檢查是否有回傳新的 Refresh Token (有些版本的 API 會 rotate)
+        sys_log.info(f"[DEBUG] RATR 原始回應: {RATR}")
         new_refresh = temp_cl.checkAndGetValue(RATR, "refreshToken", 2)
+        if new_refresh:
+            sys_log.info("[DEBUG] 成功從 RATR 中解析出新的 Refresh Token！")
+        else:
+            error_log.warning("[DEBUG] RATR 中沒有新的 Refresh Token，或者解析失敗！")
+
         _save_new_tokens(new_token, new_refresh)
 
         LAST_REFRESH_TIME = time.time()
@@ -167,7 +173,14 @@ def try_refresh_token(cl):
         cl.handleNextToken(new_token)
 
         # 檢查是否有回傳新的 Refresh Token
+        sys_log.info(f"[DEBUG] RATR 原始回應: {RATR}")
         new_refresh = cl.checkAndGetValue(RATR, "refreshToken", 2)
+        
+        if new_refresh:
+            sys_log.info("[DEBUG] 成功從 RATR 中解析出新的 Refresh Token！")
+        else:
+            error_log.warning("[DEBUG] RATR 中沒有新的 Refresh Token，或者解析失敗！")
+
         _save_new_tokens(new_token, new_refresh)
 
         sys_log.info("✅ Token 自動續命成功！壽命已延長。")
