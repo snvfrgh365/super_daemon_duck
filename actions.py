@@ -66,14 +66,15 @@ def active_sweep(cl):
             if not group_id: continue
 
             extra = safe_get(chat, 'extra', 8) or {}
+            group_extra = safe_get(extra, 'groupExtra', 1) or {}
             
             # 取得實際群組成員
-            member_mids = safe_get(extra, 'memberMids', 1) or {}
+            member_mids = safe_get(group_extra, 'memberMids', 4) or {}
             if isinstance(member_mids, dict): member_mids = list(member_mids.keys())
             elif not isinstance(member_mids, list): member_mids = list(member_mids)
             
             # 取得受邀尚未加入者
-            invitee_mids = safe_get(extra, 'inviteeMids', 2) or {}
+            invitee_mids = safe_get(group_extra, 'inviteeMids', 5) or {}
             if isinstance(invitee_mids, dict): invitee_mids = list(invitee_mids.keys())
             elif not isinstance(invitee_mids, list): invitee_mids = list(invitee_mids)
             

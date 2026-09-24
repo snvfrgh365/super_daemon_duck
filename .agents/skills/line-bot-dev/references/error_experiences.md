@@ -80,7 +80,7 @@ When working on this LINE Bot project using CHRLINE, be aware of the following k
 ## 13. Phantom Ban Infinite Loop (Metadata Brute-forcing)
 - **Symptom:** The bot infinitely spams "Target Found!" and "Kicked target!" in the logs for a specific user, but the user is not actually in the group's member list on your phone.
 - **Root Cause:** If you use a brute-force scanner (like `extract_all_user_mids`) that blindly extracts any 33-char `u`-prefixed string from the `Chat` Thrift payload, you will accidentally extract the MIDs of the chat's creator, or people who were previously invited/kicked, because their MIDs remain embedded in the chat's historical metadata. The bot then attempts to kick them. Since they aren't members, `cl.deleteOtherFromChat()` fails silently on the server, causing the bot to retry infinitely in the next sweep.
-- **Solution:** Never use brute-force MID extraction for executing actions. Explicitly extract ONLY the `memberMids` and `inviteeMids` dictionaries from `chat['extra']`. Execute `deleteOtherFromChat` for members, and `cancelChatInvitation` for invitees.
+- **Solution:** Never use brute-force MID extraction for executing actions. Explicitly extract ONLY the `memberMids` (key 4) and `inviteeMids` (key 5) dictionaries from `chat['extra']['groupExtra']` (key 8 -> key 1). Execute `deleteOtherFromChat` for members, and `cancelChatInvitation` for invitees.
 
 ## 14. Suicide/Self-Targeting Loop
 - **Symptom:** If `TARGET_NAME` is configured to the bot's own name, the bot will infinitely attempt to ban itself.
