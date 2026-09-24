@@ -200,3 +200,59 @@ def diagnose_error(e):
         result["reason"] = "Cannot reach LINE server, check network"
 
     return result
+
+
+# ============================================================
+# Console.log 自動輪轉器 (取代 bash nohup > console.log)
+# ============================================================
+
+class ConsoleRotator:
+    """攔截 print() 輸出，並寫入會自動換日的 console.log 中。"""
+    def __init__(self, filename):
+        import sys
+        self.original_stdout = sys.stdout
+        self.original_stderr = sys.stderr
+        
+        # 設定會自動換日的 Handler (每天半夜輪轉)
+        self.handler = TimedRotatingFileHandler(
+            filename=filename,
+            when="midnight",
+            interval=1,
+            backupCount=7,  # 保留 7 天的戰情看板與原始輸出
+            encoding="utf-8"
+        )
+        self.handler.suffix = "_%Y-%m-%d"
+        # 不加 formatter，保留最原始的排版
+        
+    def write(self, message):
+        # 如果是空字串就不處理
+        if not message:
+            return
+            
+        # 寫入日誌檔 (觸發內建的換日邏輯)
+        if self.handler.stream is None:
+            self.handler.stream = self.handler._open()
+            
+        # 模擬 emit 的邏輯來檢查是否需要換日 (簡易實作)
+        if self.handler.shouldRollover(logging.LogRecord("", 0, "", 0, message, None, None)):
+            self.handler.doRollover()
+            
+        self.handler.stream.write(message)
+        self.handler.stream.flush()
+        
+        # 同時輸出到原本的 stdout (確保終端機看得到)
+        self.original_stdout.write(message)
+        self.original_stdout.flush()
+
+    def flush(self):
+        if self.handler.stream:
+            self.handler.stream.flush()
+        self.original_stdout.flush()
+
+def setup_console_rotator():
+    import sys
+    log_file = os.path.join(LOG_BASE, "console.log")
+    rotator = ConsoleRotator(log_file)
+    sys.stdout = rotator
+    sys.stderr = rotator
+    return rotator

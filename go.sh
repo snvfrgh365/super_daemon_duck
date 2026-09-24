@@ -11,9 +11,9 @@ if pgrep -f "python.*bot.py" > /dev/null; then
     echo "👉 請輸入 ./see.sh 即時觀看戰情看板"
     echo "👉 或輸入 ./stop.sh 停止機器人"
 else
-    # 用 nohup 在背景執行，所有輸出寫入 logs/console.log
+    # 用 nohup 在背景執行，Python 內部會自動將 print 攔截並寫入 logs/console.log (並自動按日輪轉)
     mkdir -p logs
-    nohup python3 bot.py > logs/console.log 2>&1 &
+    nohup python3 bot.py > /dev/null 2>&1 &
     echo $! > .bot.pid
     echo "✅ 機器人已成功在背景啟動！(PID: $(cat .bot.pid))"
     echo "👉 輸入 ./see.sh 即時觀看戰情看板"

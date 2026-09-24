@@ -9,7 +9,19 @@ import dashboard
 import auth
 import actions
 from dashboard import safe_get
-from logger import sys_log, error_log, action_log, diagnose_error, format_uptime
+from logger import sys_log, error_log, action_log, diagnose_error, format_uptime, setup_console_rotator
+
+# 啟動 Console 自動輪轉機制
+setup_console_rotator()
+
+def print_boot_banner():
+    banner = f"\n{'█'*64}\n{' '*18}🚀 BOT SYSTEM RESTART {' '*19}\n{'█'*64}\n"
+    print(banner)
+    sys_log.info(f"\n{'='*40}\n🚀 系統啟動標記 (SYSTEM START)\n{'='*40}")
+    error_log.warning(f"\n{'='*40}\n🚀 系統啟動標記 (SYSTEM START)\n{'='*40}")
+    action_log.info(f"\n{'='*40}\n🚀 系統啟動標記 (SYSTEM START)\n{'='*40}")
+
+print_boot_banner()
 
 CHRLINE_PARAMS = {
     "device": "DESKTOPMAC",
