@@ -71,10 +71,10 @@ def run_bot():
     else:
         error_log.warning("⚠️ 開機強制續命失敗，將先使用原 Token 繼續執行。")
 
-    # 開機初始化：印出看板並立刻進行主動清場
+    # 開機初始化：立刻進行主動清場，再印出看板
     boot_time = time.time()
-    dashboard.print_status_report(cl, boot_time)
     actions.active_sweep(cl)
+    dashboard.print_status_report(cl, boot_time)
 
     sys_log.info("防護系統已上線，主迴圈監聽中...")
     cl.revision = cl.getLastOpRevision()
@@ -83,13 +83,23 @@ def run_bot():
 
     def background_sweep():
         while True:
-            sleep_time = random.uniform(config.REPORT_INTERVAL_MIN, config.REPORT_INTERVAL_MAX)
-            time.sleep(sleep_time)
+            start_time = time.time()
+            
             try:
-                dashboard.print_status_report(cl, boot_time)
                 actions.active_sweep(cl)
+                dashboard.print_status_report(cl, boot_time)
             except Exception as e:
                 error_log.error("背景巡邏發生異常: %s" % e)
+                
+            # 計算掃描與畫看板耗費了多少時間
+            elapsed = time.time() - start_time
+            
+            # 目標休息時間
+            target_sleep = random.uniform(config.REPORT_INTERVAL_MIN, config.REPORT_INTERVAL_MAX)
+            
+            # 把剛剛耗費的時間從休息時間中扣除 (如果耗時超過目標時間，就不休息直接進入下一輪)
+            actual_sleep = max(0, target_sleep - elapsed)
+            time.sleep(actual_sleep)
 
     # 啟動背景巡邏執行緒
     sweep_thread = threading.Thread(target=background_sweep, daemon=True)
