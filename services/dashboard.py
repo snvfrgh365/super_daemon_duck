@@ -232,7 +232,6 @@ def print_status_report(cl, boot_time=None, state=None):
     sys.stdout = original_stdout
     
     from core.config import BASE_DIR
-    import os
     dashboard_file = os.path.join(BASE_DIR, "logs", "dashboard.txt")
     with open(dashboard_file, "w", encoding="utf-8") as f:
         f.write(buffer.getvalue())
