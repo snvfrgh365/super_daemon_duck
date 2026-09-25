@@ -1,13 +1,33 @@
 import json
 import os
+from datetime import datetime
 
 DB_PATH = "data/uid_history.json"
 
+def _get_now_str():
+    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+def _migrate_db(db):
+    """
+    將舊版的純字串陣列遷移成帶有時間戳記的結構。
+    Old: { "uid1": ["Name1", "Name2"] }
+    New: { "uid1": [{"name": "Name1", "seen_at": "2026-09..."}] }
+    """
+    migrated = False
+    for uid, history in db.items():
+        if not history: continue
+        if isinstance(history[0], str):
+            # 舊版格式，進行轉換
+            new_history = [{"name": n, "seen_at": _get_now_str()} for n in history]
+            db[uid] = new_history
+            migrated = True
+    return migrated
+
 def update_uid_db(members_dict):
     """
-    更新 UID 與名稱的對應資料庫，並記錄名稱變更歷史。
-    members_dict: dict, format { "uid1": "Current Name", "uid2": "Another Name" }
-    回傳: dict, 最新完整的歷史紀錄 (e.g. { "uid1": ["Old Name", "Current Name"] })
+    更新 UID 與名稱的對應資料庫，並記錄名稱變更歷史（含時間戳記）。
+    members_dict: dict, format { "uid1": "Current Name" }
+    回傳: dict, 最新完整的歷史紀錄 (結構為 List[dict])
     """
     os.makedirs(os.path.dirname(DB_PATH) or ".", exist_ok=True)
     
@@ -21,22 +41,31 @@ def update_uid_db(members_dict):
     else:
         db = {}
         
-    changed = False
+    changed = _migrate_db(db)
     
     for uid, name in members_dict.items():
         if not name or name == "官方帳號 / 未知":
             continue
             
         if uid not in db:
-            db[uid] = [name]
+            db[uid] = [{"name": name, "seen_at": _get_now_str()}]
             changed = True
         else:
-            # 如果目前名字和紀錄中最後一個名字不同，代表改名了
-            if db[uid][-1] != name:
-                if name in db[uid]:
-                    # 以前用過這個名字，把它移到最新
-                    db[uid].remove(name)
-                db[uid].append(name)
+            # 檢查目前最後一個名字是否與新名字相同
+            last_entry = db[uid][-1]
+            if last_entry["name"] != name:
+                # 檢查是否以前用過
+                existing_idx = next((i for i, v in enumerate(db[uid]) if v["name"] == name), -1)
+                
+                if existing_idx != -1:
+                    # 如果以前用過，更新它的時間並把它移到最後面（最新）
+                    entry = db[uid].pop(existing_idx)
+                    entry["seen_at"] = _get_now_str()
+                    db[uid].append(entry)
+                else:
+                    # 第一次用這個名字
+                    db[uid].append({"name": name, "seen_at": _get_now_str()})
+                
                 changed = True
                 
     if changed:

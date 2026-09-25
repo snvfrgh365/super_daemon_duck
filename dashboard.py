@@ -105,11 +105,11 @@ def _print_member_table(members):
         members: list of (name, mid) tuples
     """
     NUM_W = 4    # 序號欄寬度
-    NAME_W = 45  # 名稱欄寬度 (加長以容納曾用名)
+    NAME_W = 60  # 名稱欄寬度 (加長以容納曾用名與時間戳)
 
     # 表頭
     print(f"     ┌{'─' * NUM_W}┬{'─' * NAME_W}┐")
-    print(f"     │{_pad(' # ', NUM_W)}│{_pad(' 名稱 (曾用名)', NAME_W)}│")
+    print(f"     │{_pad(' # ', NUM_W)}│{_pad(' 名稱 (曾用名與日期)', NAME_W)}│")
     print(f"     ├{'─' * NUM_W}┼{'─' * NAME_W}┤")
 
     for idx, (name, history, mid) in enumerate(members, 1):
@@ -118,13 +118,39 @@ def _print_member_table(members):
         # 組合顯示名稱與歷史紀錄
         display_name = name
         if len(history) > 1:
-            past_names = " -> ".join(history[:-1])
+            past_records = []
+            
+            # 為了避免過長，最多只顯示最近 2 個曾用名
+            history_to_show = history[:-1]
+            hidden_count = 0
+            
+            if len(history_to_show) > 2:
+                hidden_count = len(history_to_show) - 2
+                history_to_show = history_to_show[-2:]
+                
+            for record in history_to_show:
+                if isinstance(record, dict) and 'name' in record:
+                    short_date = record.get('seen_at', '')[5:10] # '09-24'
+                    past_records.append(f"{record['name']}({short_date})")
+                else:
+                    past_records.append(str(record))
+            
+            past_names = " -> ".join(past_records)
+            if hidden_count > 0:
+                past_names = f"...等{hidden_count}個 -> " + past_names
+                
             display_name = f"{name} (曾用: {past_names})"
             
-        # 如果超出寬度，強行截斷避免排版跑掉
+        # 聰明截斷：如果超出寬度，強行截斷避免排版跑掉，並確保括號完美收尾
         display_width = _display_width(display_name)
         if display_width > NAME_W - 2:
-            display_name = display_name[:NAME_W - 6] + "..."
+            suffix = "...)" if len(history) > 1 else "..."
+            
+            # 逐字刪減直到加上 suffix 後符合寬度
+            while _display_width(display_name) + _display_width(suffix) > NAME_W - 2:
+                display_name = display_name[:-1]
+                
+            display_name += suffix
             
         name_str = _pad(f" {display_name}", NAME_W)
 
@@ -221,7 +247,7 @@ def print_status_report(cl, boot_time=None):
                     # 轉為 (name, history, mid) 格式
                     members = []
                     for mid, current_name in members_dict.items():
-                        history = db.get(str(mid), [current_name])
+                        history = db.get(str(mid), [{"name": current_name}])
                         members.append((current_name, history, str(mid)))
 
                     print(f"\n  {i}. 🏷️  {g_name}（{len(members)} 人）")
