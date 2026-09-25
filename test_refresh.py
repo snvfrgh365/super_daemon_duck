@@ -55,10 +55,19 @@ def test_refresh():
         if new_token and isinstance(new_token, str):
             print("\n🎉 【測試成功】伺服器接受了你的 Refresh Token！")
             print(f"👉 取得的新 Access Token: {new_token[:30]}...")
+            
+            # 把拿到的新 Token 寫回檔案，以免原本的被作廢導致機器人斷線！
+            with open(config.TOKEN_FILE, "w") as f:
+                f.write(new_token)
+            print(f"💾 已將新 Access Token 儲存至 {config.TOKEN_FILE}")
+            
             if new_refresh:
                 print(f"👉 取得的新 Refresh Token: {new_refresh[:30]}...")
+                with open(config.REFRESH_TOKEN_FILE, "w") as f:
+                    f.write(new_refresh)
+                print(f"💾 已將新 Refresh Token 儲存至 {config.REFRESH_TOKEN_FILE}")
             else:
-                print("👉 (伺服器未派發新 Refresh Token，代表原 Refresh Token 可以繼續重複使用)")
+                print("👉 (伺服器未派發新 Refresh Token，原 Token 可繼續使用)")
                 
             print("\n✅ 這證明了你的機器人 3 小時後絕對可以自己續命成功，不會被 Ban！")
         else:

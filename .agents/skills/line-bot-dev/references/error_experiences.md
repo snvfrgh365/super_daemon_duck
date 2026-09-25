@@ -11,9 +11,11 @@ When working on this LINE Bot project using CHRLINE, be aware of the following k
 - **Symptom:** The bot spams the LINE servers with refresh attempts, or the user gets hit with a `Code 1000` (invalid refresh token) and a 24-hour IP/account ban (`Code 100` / `Code 4`).
 - **Root Cause 1 (Cooldowns):** A bug in old code where the cooldown timer was only updated upon a *successful* refresh. If a refresh failed, it would retry immediately.
 - **Root Cause 2 (Forced Boot Refresh):** Attempting to forcefully call `refreshAccessToken` every time the bot boots up. Because developers restart the bot frequently during debugging, this spams the server and triggers a permanent 24-hour ban on the account/IP.
+- **Root Cause 3 (Unsaved Test Refreshes):** If you write a temporary script to test `refreshAccessToken` but forget to save the returned tokens back to `tokens/`, the LINE server will invalidate your old tokens. Your main bot will then crash because the tokens on its disk are now dead.
 - **Solution:** 
   1. Always update the cooldown timestamp *before* making the API call (at the top of the `try` block). 
-  2. **NEVER** implement a "Forced Boot Refresh". The bot should simply boot using the existing Access Token. Only call `refreshAccessToken` passively when the server throws a `Code 8` (Token Expired) exception.
+  2. **NEVER** implement a "Forced Boot Refresh". The bot should simply boot using the existing Access Token.
+  3. **ALWAYS** save the new `accessToken` and `refreshToken` back to the disk file the exact moment you receive them from `refreshAccessToken`.
 - **Symptom:** Functions you try to call from the [Old API Reference](./chrline_old_api.md) raise exceptions like `AttributeError`, "fetchOps not found", or return entirely different data structures.
 - **Root Cause:** LINE API is completely undocumented officially, and CHRLINE is a reverse-engineered library. The API changes frequently. For example, `fetchOps` was deprecated/removed by LINE and replaced by `sync`.
 - **Solution:** 
