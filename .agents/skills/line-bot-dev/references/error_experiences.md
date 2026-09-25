@@ -88,3 +88,27 @@ When working on this LINE Bot project using CHRLINE, be aware of the following k
 - **Symptom:** If `TARGET_NAME` is configured to the bot's own name, the bot will infinitely attempt to ban itself.
 - **Root Cause:** A bot cannot kick itself using `deleteOtherFromChat` (it must use `leaveGroup`). Thus, the kick fails silently, and the bot continues to detect itself in every sweep.
 - **Solution:** Always implement a self-protection check: fetch the bot's own MID via `cl.profile.mid`, and explicitly `continue` or `return` if the target MID matches the bot's MID in `actions.py` and `bot.py`.
+
+## 15. Silent Crash on Missing Config Property in Daemon Mode
+- **Symptom:** The bot starts, logs "✅ 登入成功！", but never prints "主迴圈監聽中...". The dashboard freezes at an old timestamp, and the background process silently dies without outputting any python exception to `error.log`.
+- **Root Cause:** A module (e.g., `services/uid_db.py`) imports a config property (e.g., `config.UID_DB_FILE`) that was never defined in `core/config.py`. Since this import happens in the main thread (during early boot/dashboard drawing) *before* the `try/except` loop of `background_sweep` starts, it triggers an `AttributeError` that kills the entire script silently in `nohup` mode.
+- **Solution:** Always meticulously double-check that every variable referenced across decoupled files actually exists in the central `config.py`.
+
+## 16. Log Tailing Failure with TimedRotatingFileHandler
+- **Symptom:** `scripts/see.sh` fails to display the latest action or system logs, always showing "尚無任何紀錄" even though the Python process is actively logging.
+- **Root Cause:** Python's `TimedRotatingFileHandler` writes to the exact base filename (e.g., `action.log`) and only appends the date suffix (e.g., `action_2026-09-25.log`) during the midnight rollover. If bash scripts mistakenly `tail $(ls -t action_*.log)`, they will only grab *yesterday's* rolled-over log, completely missing today's active `action.log`.
+- **Solution:** Bash monitoring scripts must tail the active base filename explicitly: `tail -n 5 logs/action/action.log`.
+
+## 17. Absolute Equality vs Substring Matching in Python Sets
+- **Symptom:** Target lists (like `target_names.txt`) seem to misbehave when dealing with invisible/whitespace characters.
+- **Root Cause:** Python's `in` operator on a `set()` (e.g., `name in get_target_names()`) evaluates as *absolute equality* (O(1) hash collision), not a fuzzy substring match. However, if the text file is read using `line.strip()`, it forcibly removes intentional spaces (like `"張興華 "`). If `is_target()` also uses `name.strip()`, it alters the exact LINE API payload, potentially causing false positives or allowing targets to evade by padding spaces.
+- **Solution:** When absolute accuracy is required, read the target list using `line.rstrip("\r\n")` to preserve user-intended trailing spaces, and do NOT apply `.strip()` to the incoming `name` payload from LINE.
+
+## 18. Path Binding in Linux Background Scripts (Relative vs Absolute)
+- **Symptom:** Scripts run perfectly when initiated from `~/good_line_bot/`, but crash or write files to strange directories when triggered via systemd, cron, or from another folder.
+- **Root Cause:** Functions like `open("logs/dashboard.txt", "w")` use relative paths based on the Current Working Directory (CWD).
+- **Solution:** All internal file references must be anchored to an absolute `BASE_DIR` computed dynamically:
+  ```python
+  BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+  os.path.join(BASE_DIR, "logs", "dashboard.txt")
+  ```
