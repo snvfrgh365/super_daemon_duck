@@ -25,16 +25,26 @@ def _read_refresh_token():
 
 
 def _check_cooldown():
-    """檢查冷卻時間，回傳 True 表示可以繼續，False 表示仍在冷卻中。"""
+    """
+    檢查冷卻時間。
+    回傳 'COOLDOWN' 表示仍在 5 分鐘冷卻期內 (避免狂發請求)。
+    回傳 'FRESH' 表示距離上次續命不到 2 小時，Token 還很新鮮，不需要換。
+    回傳 'PROCEED' 表示可以進行續命。
+    """
     global LAST_REFRESH_TIME
     current_time = time.time()
     elapsed = current_time - LAST_REFRESH_TIME
 
-    if elapsed < REFRESH_COOLDOWN:
+    if elapsed < REFRESH_COOLDOWN: # 300s
         remaining = int(REFRESH_COOLDOWN - elapsed)
         error_log.warning(f"續命冷卻中，{remaining} 秒後才能重試")
-        return False
-    return True
+        return 'COOLDOWN'
+        
+    if elapsed < 7200: # 2小時內剛換過
+        sys_log.info("Token 剛在 2 小時內續命過，依然新鮮，跳過本次續命請求。")
+        return 'FRESH'
+        
+    return 'PROCEED'
 
 
 def _save_new_tokens(new_access_token, new_refresh_token=None):
@@ -62,7 +72,8 @@ def try_startup_refresh():
     """
     global LAST_REFRESH_TIME
 
-    if not _check_cooldown():
+    cooldown_status = _check_cooldown()
+    if cooldown_status == 'COOLDOWN' or cooldown_status == 'FRESH':
         return None
 
     refresh_token = _read_refresh_token()
@@ -145,8 +156,11 @@ def try_refresh_token(cl):
     """
     global LAST_REFRESH_TIME
 
-    if not _check_cooldown():
+    cooldown_status = _check_cooldown()
+    if cooldown_status == 'COOLDOWN':
         return False
+    elif cooldown_status == 'FRESH':
+        return True
 
     refresh_token = _read_refresh_token()
     if not refresh_token:
