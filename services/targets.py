@@ -19,7 +19,8 @@ def _get_cached_lines(filepath, cache_key, mtime_key):
         current_mtime = os.path.getmtime(filepath)
         if current_mtime > _cache[mtime_key]:
             with open(filepath, "r", encoding="utf-8") as f:
-                _cache[cache_key] = {line.strip() for line in f if line.strip()}
+                # 僅移除換行符號，保留使用者刻意輸入的頭尾空白或特殊字元
+                _cache[cache_key] = {line.rstrip("\r\n") for line in f if line.rstrip("\r\n")}
             _cache[mtime_key] = current_mtime
         return _cache[cache_key]
     except Exception as e:
@@ -33,10 +34,11 @@ def get_target_uids():
     return _get_cached_lines(UIDS_FILE, "uids", "uids_mtime")
 
 def is_target(name, mid):
-    """判斷給定的名稱或 UID 是否在目標名單內"""
-    if name and name in get_target_names():
+    """判斷給定的名稱或 UID 是否在目標名單內 (要求絕對相等，非模糊比對)"""
+    # 這裡不再對 name 使用 .strip()，確保連「空白」都絕對匹配
+    if name and str(name) in get_target_names():
         return True
-    if mid and str(mid) in get_target_uids():
+    if mid and str(mid).strip() in get_target_uids():
         return True
     return False
 

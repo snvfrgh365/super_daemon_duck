@@ -230,5 +230,9 @@ def print_status_report(cl, boot_time=None, state=None):
     
     # 恢復原本的 stdout，並將 buffer 寫入檔案
     sys.stdout = original_stdout
-    with open("logs/dashboard.txt", "w", encoding="utf-8") as f:
+    
+    from core.config import BASE_DIR
+    import os
+    dashboard_file = os.path.join(BASE_DIR, "logs", "dashboard.txt")
+    with open(dashboard_file, "w", encoding="utf-8") as f:
         f.write(buffer.getvalue())

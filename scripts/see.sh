@@ -24,10 +24,10 @@ while true; do
     echo "  🚨 最新攔截事件 (Action Logs) - 最近 5 筆"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     
-    # 找出最新的 action log 檔案
-    LATEST_ACTION=$(ls -t $ACTION_LOG_DIR/action_*.log 2>/dev/null | head -n 1)
-    if [ -n "$LATEST_ACTION" ]; then
-        tail -n 5 "$LATEST_ACTION" | while read -r line; do echo "    $line"; done
+    # 最新攔截事件
+    ACTION_FILE="$ACTION_LOG_DIR/action.log"
+    if [ -f "$ACTION_FILE" ]; then
+        tail -n 5 "$ACTION_FILE" | while read -r line; do echo "    $line"; done
     else
         echo "    (尚無任何攔截事件紀錄)"
     fi
@@ -37,10 +37,10 @@ while true; do
     echo "  ⚙️ 最新系統動態 (System Logs) - 最近 5 筆"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     
-    # 找出最新的 system log 檔案
-    LATEST_SYS=$(ls -t $SYS_LOG_DIR/system_*.log 2>/dev/null | head -n 1)
-    if [ -n "$LATEST_SYS" ]; then
-        tail -n 5 "$LATEST_SYS" | while read -r line; do echo "    $line"; done
+    # 最新系統動態
+    SYS_FILE="$SYS_LOG_DIR/system.log"
+    if [ -f "$SYS_FILE" ]; then
+        tail -n 5 "$SYS_FILE" | while read -r line; do echo "    $line"; done
     else
         echo "    (尚無任何系統動態紀錄)"
     fi

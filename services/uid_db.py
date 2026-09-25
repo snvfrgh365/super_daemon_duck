@@ -2,8 +2,9 @@ import json
 import os
 from datetime import datetime
 
-DB_PATH = "data/uid_history.json"
+from core import config
 
+DB_PATH = config.UID_DB_FILE
 def _get_now_str():
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
