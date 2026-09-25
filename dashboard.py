@@ -3,6 +3,9 @@ import time
 import unicodedata
 from datetime import datetime
 import config
+import sys
+import io
+import os
 
 
 def safe_get(obj, attr, key):
@@ -140,10 +143,15 @@ def _print_member_table(members):
 # ============================================================
 
 def print_status_report(cl, boot_time=None):
-    """印出完整的戰情看板。"""
-    _print_header(cl, boot_time)
-
+    """印出完整的戰情看板，並導向至 logs/dashboard.txt"""
+    os.makedirs('logs', exist_ok=True)
+    
+    original_stdout = sys.stdout
+    buffer = io.StringIO()
+    sys.stdout = buffer
+    
     try:
+        _print_header(cl, boot_time)
         # 1. 取得群組 IDs
         chat_res = cl.getAllChatMids()
         gids = safe_get(chat_res, 'memberChatMids', 1)
@@ -230,3 +238,8 @@ def print_status_report(cl, boot_time=None):
         print(f"❌ 讀取群組列表發生例外: {e}")
 
     print("━" * 64 + "\n")
+    
+    # 恢復原本的 stdout，並將 buffer 寫入檔案
+    sys.stdout = original_stdout
+    with open("logs/dashboard.txt", "w", encoding="utf-8") as f:
+        f.write(buffer.getvalue())
