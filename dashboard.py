@@ -87,6 +87,7 @@ def _print_header(cl, boot_time):
     print(f"╔{'═' * W}╗")
     print(f"║  🛡️  Super Daemon Duck — 戰情看板{' ' * (W - 36)}║")
     print(f"╠{'═' * W}╣")
+    print(f"║  🎯 目標:  {_pad(config.TARGET_NAME, W - 12)}║")
     print(f"║  🕒 時間:  {_pad(now_str, W - 12)}║")
     print(f"║  🤖 身分:  {_pad(bot_name, W - 12)}║")
     print(f"║  🆔 UID:   {_pad(bot_mid, W - 12)}║")
