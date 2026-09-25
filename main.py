@@ -70,15 +70,21 @@ def run_bot():
 
     sys_log.info("✅ 登入成功！")
     
-    # 開機初始化：立刻進行主動清場，再印出看板
-    boot_time = time.time()
-    from services import scanner
-    state = scanner.fetch_group_state(cl)
-    actions.active_sweep(cl, state)
-    dashboard.print_status_report(cl, boot_time, state)
+    try:
+        # 開機初始化：立刻進行主動清場，再印出看板
+        boot_time = time.time()
+        from services import scanner
+        state = scanner.fetch_group_state(cl)
+        actions.active_sweep(cl, state)
+        dashboard.print_status_report(cl, boot_time, state)
 
-    sys_log.info("防護系統已上線，主迴圈監聽中...")
-    cl.revision = cl.getLastOpRevision()
+        sys_log.info("防護系統已上線，主迴圈監聽中...")
+        cl.revision = cl.getLastOpRevision()
+    except Exception as e:
+        import traceback
+        error_log.error("啟動初始化崩潰: %s\n%s" % (e, traceback.format_exc()))
+        sys_log.error("啟動初始化崩潰，機器人停止。")
+        return
 
     import threading
 
