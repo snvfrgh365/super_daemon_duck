@@ -61,7 +61,7 @@ def test_refresh():
                 f.write(new_token)
             print(f"💾 已將新 Access Token 儲存至 {config.TOKEN_FILE}")
             
-            if new_refresh:
+            if new_refresh and isinstance(new_refresh, str):
                 print(f"👉 取得的新 Refresh Token: {new_refresh[:30]}...")
                 with open(config.REFRESH_TOKEN_FILE, "w") as f:
                     f.write(new_refresh)
