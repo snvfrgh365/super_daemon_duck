@@ -131,15 +131,9 @@ def try_startup_refresh():
             error_log.error(f"Refresh 回應異常: 取得的 Token 非字串 (值為 {new_token})，可能伺服器回傳了錯誤代碼。")
             return None
 
-        # 檢查是否有回傳新的 Refresh Token (有些版本的 API 會 rotate)
+        # 遵循指示：不要更新 Refresh Token，只更新 Access Token
         sys_log.info(f"[DEBUG] RATR 原始回應: {RATR}")
-        new_refresh = temp_cl.checkAndGetValue(RATR, "refreshToken", 2)
-        if new_refresh:
-            sys_log.info("[DEBUG] 成功從 RATR 中解析出新的 Refresh Token！")
-        else:
-            error_log.warning("[DEBUG] RATR 中沒有新的 Refresh Token，或者解析失敗！")
-
-        _save_new_tokens(new_token, new_refresh)
+        _save_new_tokens(new_token, None)
 
         global LAST_REFRESH_TIME, REFRESH_SUCCESS_COUNT
         LAST_REFRESH_TIME = time.time()
@@ -189,16 +183,9 @@ def try_refresh_token(cl):
         cl.authToken = new_token
         cl.handleNextToken(new_token)
 
-        # 檢查是否有回傳新的 Refresh Token
+        # 遵循指示：不要更新 Refresh Token，只更新 Access Token
         sys_log.info(f"[DEBUG] RATR 原始回應: {RATR}")
-        new_refresh = cl.checkAndGetValue(RATR, "refreshToken", 2)
-        
-        if new_refresh:
-            sys_log.info("[DEBUG] 成功從 RATR 中解析出新的 Refresh Token！")
-        else:
-            error_log.warning("[DEBUG] RATR 中沒有新的 Refresh Token，或者解析失敗！")
-
-        _save_new_tokens(new_token, new_refresh)
+        _save_new_tokens(new_token, None)
 
         global REFRESH_SUCCESS_COUNT
         REFRESH_SUCCESS_COUNT += 1

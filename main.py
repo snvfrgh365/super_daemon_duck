@@ -70,6 +70,13 @@ def run_bot():
 
     sys_log.info("✅ 登入成功！")
     
+    # [新] 開機強制續命一次，確保有完整的 3 小時壽命
+    sys_log.info("【開機強制續命】嘗試確保 Token 壽命重置...")
+    auth.LAST_REFRESH_TIME = 0  # 忽略任何可能的冷卻限制
+    if auth.try_refresh_token(cl):
+        sys_log.info("✅ 開機強制續命成功。")
+    else:
+        error_log.warning("⚠️ 開機強制續命失敗，將使用舊 Token 繼續嘗試...")
     try:
         # 開機初始化：立刻進行主動清場，再印出看板
         boot_time = time.time()
@@ -110,35 +117,9 @@ def run_bot():
             actual_sleep = max(0, target_sleep - elapsed)
             time.sleep(actual_sleep)
 
-    def proactive_refresh():
-        """
-        每 2.5 小時主動 refresh，搶在 LINE session timeout (3小時) 之前續命。
-        【重大發現】不能等 Code 8 發生才被動續命！
-        一旦 Code 8 發生，代表該連線的所有權限已被註銷，此時再呼叫 refreshAccessToken 會直接被伺服器以 Code 1000 (INVALID_GRANT) 拒絕！
-        因此必須在 Token 活著的時候主動要新 Token。
-        """
-        while True:
-            # 隨機睡 2.5 小時 (9000秒) 到 2.7 小時 (9720秒)
-            sleep_time = random.uniform(9000, 9720)
-            sys_log.info("[主動續命] 下次排程: %.1f 小時後" % (sleep_time / 3600))
-            time.sleep(sleep_time)
-            
-            try:
-                sys_log.info("[主動續命] 定期 Token 續命排程啟動...")
-                if auth.try_refresh_token(cl):
-                    sys_log.info("[主動續命] Token 已成功延長壽命。")
-                else:
-                    error_log.warning("[主動續命] 續命未成功，下一個排程再試...")
-            except Exception as e:
-                error_log.error("[主動續命] 發生異常: %s" % e)
-
     # 啟動背景巡邏執行緒
     sweep_thread = threading.Thread(target=background_sweep, daemon=True)
     sweep_thread.start()
-    
-    # 啟動主動續命執行緒
-    refresh_thread = threading.Thread(target=proactive_refresh, daemon=True)
-    refresh_thread.start()
 
     error_streak = 0
 
