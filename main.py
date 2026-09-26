@@ -121,6 +121,30 @@ def run_bot():
     sweep_thread = threading.Thread(target=background_sweep, daemon=True)
     sweep_thread.start()
 
+    def proactive_refresh():
+        while True:
+            # 隨機等待 2 到 2.5 小時 (避免精準 2.5 踩線被抓)
+            refresh_interval = random.uniform(2 * 3600, 2.5 * 3600)
+            time.sleep(refresh_interval)
+            
+            try:
+                sys_log.info("🔄 [背景續命] Access Token 已接近壽命極限，嘗試主動更換...")
+                if auth.try_refresh_token(cl):
+                    sys_log.info("✅ [背景續命] 成功更換 Access Token，延長生命週期！")
+                    try:
+                        cl.revision = cl.getLastOpRevision()
+                    except:
+                        pass
+                else:
+                    error_log.warning("⚠️ [背景續命] 嘗試更新 Token 失敗")
+            except Exception as e:
+                error_log.error(f"❌ [背景續命] 發生異常: {e}")
+
+    # 啟動主動續命執行緒
+    refresh_thread = threading.Thread(target=proactive_refresh, daemon=True)
+    refresh_thread.start()
+
+
     error_streak = 0
 
     while True:
