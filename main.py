@@ -122,9 +122,13 @@ def run_bot():
     sweep_thread.start()
 
     def proactive_refresh():
+        import datetime
         while True:
             # 隨機等待 2 到 2.5 小時 (避免精準 2.5 踩線被抓)
             refresh_interval = random.uniform(2 * 3600, 2.5 * 3600)
+            next_time = datetime.datetime.now() + datetime.timedelta(seconds=refresh_interval)
+            next_time_str = next_time.strftime('%Y-%m-%d %H:%M:%S')
+            sys_log.info(f"⏳ [背景續命] 下次主動更新 Token 時間預計為: {next_time_str}")
             time.sleep(refresh_interval)
             
             try:
