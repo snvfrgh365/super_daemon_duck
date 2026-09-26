@@ -1,11 +1,18 @@
-# Error Experiences and Known Issues
+﻿# Error Experiences and Known Issues
 
 When working on this LINE Bot project using CHRLINE, be aware of the following known issues, error patterns, and API quirks.
 
-## 1. Session Idle Timeout (Code 8: `V3_TOKEN_CLIENT_LOGGED_OUT`) & Auto-Recovery
-- **Symptom:** The bot runs normally for roughly 3 hours and then suddenly gets forced out with a `V3_TOKEN_CLIENT_LOGGED_OUT` (Code 8) error. After that, attempts to call `refreshAccessToken` fail with `Code 1000, Message 2`.
-- **Root Cause:** A single Access Token session/connection has a hard lifespan of ~2.5 to 3 hours before the server terminates it. **CRITICAL FINDING:** LINE's V3 Auth strictly prohibits calling `refreshAccessToken` AFTER the session has already been terminated (`Code 8`). If you wait for the session to die before requesting a new token, the server will reject your Refresh Token request with `Code 1000` (INVALID_GRANT) because the underlying E2EE connection/session is already marked as dead.
-- **The Solution (Proactive Refresh):** You **must** run a `proactive_refresh` thread that calls `auth.try_refresh_token(cl)` every 2.5 hours, *before* the 3-hour expiry. This safely exchanges the Refresh Token for a new Access Token while the old connection is still valid. Then, when the old connection finally dies 30 minutes later (`Code 8`), the main thread will catch the exception, verify the token is already fresh, and simply rebuild the `cl.sync()` connection using the new Access Token, achieving a seamless recovery.
+## 1. The 12-Hour Death Trap & Refresh Token Overwriting (Code: 8 / Code: 1000)
+- **Symptom:** The bot runs perfectly for exactly 8.5 to 12 hours, then gets kicked out with V3_TOKEN_CLIENT_LOGGED_OUT (Code: 8). Immediate attempts to recover fail with Code: 1000, Message: 3 (INVALID_GRANT).
+- **Root Cause:** 
+  1. **Proactive Refresh is Fatal:** Attempting to forcefully renew the token every 2.5 hours (`proactive_refresh`) while the connection is still active actually triggers LINE's server-side security policies. Doing this repeatedly limits your session lifespan to exactly 12 hours before the server entirely revokes all your credentials.
+  2. **Overwriting the Refresh Token:** The original Refresh Token obtained from QR login has a very long lifespan. However, if you mistakenly overwrite 
+`refresh_token.txt` with the new, temporary refresh token returned by 
+`refreshAccessToken()`, you destroy the primary chain. When the 12-hour limit hits, your overwritten refresh token is rendered entirely invalid (`Code 1000`).
+- **The Solution (Stable 19h+ Logic):** 
+  - **No Background Refresh:** Remove the `proactive_refresh` thread entirely. Rely purely on the `cl.sync()` background loop to keep the session alive. A continuously active connection can easily survive 19+ hours without any manual refresh.
+  - **Read-Only Refresh Token:** When you *do* need to refresh (e.g. forced refresh on boot or after a legitimate Code 8), **NEVER** save the newly returned refresh token. Only update the Access Token. Keep the original 
+`refresh_token.txt` pristine.
 
 ## 2. Token Refresh Loops & 24-Hour Bans (Anti-Spam)
 - **Symptom:** The bot spams the LINE servers with refresh attempts, or the user gets hit with a `Code 1000` (invalid refresh token) and a 24-hour IP/account ban (`Code 100` / `Code 4`).
@@ -112,3 +119,4 @@ When working on this LINE Bot project using CHRLINE, be aware of the following k
   BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
   os.path.join(BASE_DIR, "logs", "dashboard.txt")
   ```
+
