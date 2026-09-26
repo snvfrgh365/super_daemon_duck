@@ -10,7 +10,9 @@ import os
 # logs/action/action_2026-09-23.log
 # ============================================================
 
-LOG_BASE = "logs"
+from core.config import BASE_DIR
+
+LOG_BASE = os.path.join(BASE_DIR, "logs")
 LOG_DIRS = {
     "system": os.path.join(LOG_BASE, "system"),
     "error":  os.path.join(LOG_BASE, "error"),

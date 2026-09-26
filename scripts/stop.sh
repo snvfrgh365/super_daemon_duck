@@ -16,8 +16,8 @@ if [ -f "$PID_FILE" ]; then
     fi
 else
     # Fallback: 用 pkill 搜尋
-    if pgrep -f "python.*bot.py" > /dev/null; then
-        pkill -f "python.*bot.py"
+    if pgrep -f "python.*main.py" > /dev/null; then
+        pkill -f "python.*main.py"
         echo "🛑 機器人已停止"
     else
         echo "⚠️  找不到執行中的機器人"

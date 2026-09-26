@@ -1,8 +1,9 @@
-# config.py
+import os
 
-TARGET_NAME = "張興華"
-TOKEN_FILE = "tokens/session_token.txt"
-REFRESH_TOKEN_FILE = "tokens/refresh_token.txt"
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+TOKEN_FILE = os.path.join(BASE_DIR, "tokens", "session_token.txt")
+REFRESH_TOKEN_FILE = os.path.join(BASE_DIR, "tokens", "refresh_token.txt")
 
 # 系統防護設定
 ACTION_COOLDOWN = 0.7  # 發現目標後 0.7 秒開始執行封鎖

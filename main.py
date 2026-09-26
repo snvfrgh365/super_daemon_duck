@@ -4,12 +4,14 @@ import os
 import time
 import random
 from CHRLINE import CHRLINE
-import config
-import dashboard
-import auth
-import actions
-from dashboard import safe_get
-from logger import sys_log, error_log, action_log, diagnose_error, format_uptime, setup_console_rotator
+from core import config
+from services import dashboard
+from core import auth
+from services import actions
+from utils.helpers import safe_get
+from core.line_constants import OpField
+from services import handlers
+from core.logger import sys_log, error_log, action_log, diagnose_error, format_uptime, setup_console_rotator
 
 # 啟動 Console 自動輪轉機制
 setup_console_rotator()
@@ -37,6 +39,9 @@ def create_client(token):
 
 
 def run_bot():
+    from services import targets
+    targets.init_target_files()
+    
     if not os.path.exists(config.TOKEN_FILE):
         error_log.error("找不到 %s" % config.TOKEN_FILE)
         return
@@ -67,21 +72,25 @@ def run_bot():
     
     # 開機初始化：立刻進行主動清場，再印出看板
     boot_time = time.time()
-    actions.active_sweep(cl)
-    dashboard.print_status_report(cl, boot_time)
+    from services import scanner
+    state = scanner.fetch_group_state(cl)
+    actions.active_sweep(cl, state)
+    dashboard.print_status_report(cl, boot_time, state)
 
     sys_log.info("防護系統已上線，主迴圈監聽中...")
     cl.revision = cl.getLastOpRevision()
 
     import threading
 
+    from services import scanner
     def background_sweep():
         while True:
             start_time = time.time()
             
             try:
-                actions.active_sweep(cl)
-                dashboard.print_status_report(cl, boot_time)
+                state = scanner.fetch_group_state(cl)
+                actions.active_sweep(cl, state)
+                dashboard.print_status_report(cl, boot_time, state)
             except Exception as e:
                 error_log.error("背景巡邏發生異常: %s" % e)
                 
@@ -142,49 +151,8 @@ def run_bot():
             error_streak = 0  # 成功一次就重置
 
             for op in ops:
-                cl.revision = max(cl.revision, op[1] if isinstance(op, list) else safe_get(op, "revision", 1))
-                op_type = op[3] if isinstance(op, list) else safe_get(op, "type", 3)
-
-                # 攔截群組邀請 (Op 13, 124)
-                if op_type in [13, 124]:
-                    group_id = op[10] if isinstance(op, list) else safe_get(op, "param1", 10)
-                    param3 = op[12] if isinstance(op, list) else safe_get(op, "param3", 12)
-                    sep = "\x1e"
-                    invited_mids = param3.split(sep) if isinstance(param3, str) else (param3 if isinstance(param3, list) else [param3])
-
-                    for mid in invited_mids:
-                        if not mid:
-                            continue
-                        contact = cl.getContact(str(mid))
-                        if contact:
-                            real_name = safe_get(contact, "displayName", 22)
-                            action_log.info("[即時雷達] 偵測到邀請，被邀者: %s" % real_name)
-                            if real_name == config.TARGET_NAME:
-                                bot_mid = str(getattr(cl.profile, "mid", "")) if hasattr(cl, "profile") else ""
-                                if str(mid) == bot_mid:
-                                    continue
-                                action_log.warning("[即時雷達] 警報！目標 [%s] 被邀請！" % config.TARGET_NAME)
-                                actions.execute_ban(cl, group_id, mid, real_name, "cancel")
-
-                # 發現入群 (Op 17, 130)
-                elif op_type in [17, 130]:
-                    group_id = op[10] if isinstance(op, list) else safe_get(op, "param1", 10)
-                    joined_mid = op[11] if isinstance(op, list) else safe_get(op, "param2", 11)
-                    
-                    if not joined_mid:
-                        continue
-                        
-                    contact = cl.getContact(str(joined_mid))
-
-                    if contact:
-                        real_name = safe_get(contact, "displayName", 22)
-                        action_log.info("[即時雷達] 偵測到加入，入群者: %s" % real_name)
-                        if real_name == config.TARGET_NAME:
-                            bot_mid = str(getattr(cl.profile, "mid", "")) if hasattr(cl, "profile") else ""
-                            if str(joined_mid) == bot_mid:
-                                continue
-                            action_log.warning("[即時雷達] 警報！目標 [%s] 闖入群組！" % config.TARGET_NAME)
-                            actions.execute_ban(cl, group_id, joined_mid, real_name, "kick")
+                cl.revision = max(cl.revision, op[OpField.REVISION] if isinstance(op, list) else safe_get(op, "revision", OpField.REVISION))
+                handlers.handle_operation(cl, op)
 
         except Exception as e:
             error_streak += 1

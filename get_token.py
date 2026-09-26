@@ -36,7 +36,7 @@ for d in devices_to_test:
             
         print("\n✅ 正在自動將 Token 儲存至檔案...")
         import os
-        import config
+        from core import config
         os.makedirs(os.path.dirname(config.TOKEN_FILE) or ".", exist_ok=True)
         
         with open(config.TOKEN_FILE, "w") as f:

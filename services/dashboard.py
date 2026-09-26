@@ -2,43 +2,13 @@
 import time
 import unicodedata
 from datetime import datetime
-import config
+from core import config
 import sys
 import io
 import os
 
 
-def safe_get(obj, attr, key):
-    """安全取值器：同時支援 Object 屬性與 Dict 鍵值"""
-    if hasattr(obj, attr):
-        val = getattr(obj, attr)
-        if val is not None:
-            return val
-    if isinstance(obj, dict):
-        if key in obj:
-            return obj[key]
-        if str(key) in obj:
-            return obj[str(key)]
-    return None
-
-
-def extract_all_user_mids(obj):
-    """暴力搜索器：無差別遞迴掃描封包內所有隱藏的 LINE 使用者 MID"""
-    found = set()
-    if isinstance(obj, str):
-        # LINE 的 MID 通常長度為 33，且以 u, c, r 開頭 (u=User, c=Channel, r=Room)
-        if len(obj) == 33 and obj[0] in ('u', 'c', 'r'):
-            found.add(obj)
-    elif isinstance(obj, dict):
-        for k, v in obj.items():
-            found.update(extract_all_user_mids(k))
-            found.update(extract_all_user_mids(v))
-    elif isinstance(obj, (list, tuple, set)):
-        for item in obj:
-            found.update(extract_all_user_mids(item))
-    elif hasattr(obj, '__dict__'):
-        found.update(extract_all_user_mids(obj.__dict__))
-    return list(found)
+from utils.helpers import safe_get, extract_all_user_mids
 
 
 # ============================================================
@@ -60,6 +30,21 @@ def _pad(text, target_width):
     """將字串用空格補齊到指定的顯示寬度（考慮全形字元）。"""
     current = _display_width(text)
     return text + " " * max(0, target_width - current)
+
+
+def _truncate(text, max_width):
+    """將字串截斷到指定的顯示寬度以內，若截斷則補上 '...'"""
+    if _display_width(text) <= max_width:
+        return text
+    result = ""
+    current_width = 0
+    for ch in text:
+        w = 2 if unicodedata.east_asian_width(ch) in ('F', 'W') else 1
+        if current_width + w > max_width - 3:
+            break
+        result += ch
+        current_width += w
+    return result + "..."
 
 
 # ============================================================
@@ -85,13 +70,30 @@ def _print_header(cl, boot_time):
 
     print()
     print(f"╔{'═' * W}╗")
-    print(f"║  🛡️  Super Daemon Duck — 戰情看板{' ' * (W - 36)}║")
+    print(f"║  🛡️  SUPER DAEMON DUCK — 戰場監控系統{' ' * (W - 39)}║")
     print(f"╠{'═' * W}╣")
-    print(f"║  🎯 目標:  {_pad(config.TARGET_NAME, W - 12)}║")
+    print(f"║  [系統狀態]{' ' * (W - 12)}║")
     print(f"║  🕒 時間:  {_pad(now_str, W - 12)}║")
     print(f"║  🤖 身分:  {_pad(bot_name, W - 12)}║")
     print(f"║  🆔 UID:   {_pad(bot_mid, W - 12)}║")
-    print(f"║  ⏱️  運行:  {_pad(uptime_str, W - 13)}║")
+    
+    from core import auth
+    refresh_info = f"{uptime_str} (成功續命: {auth.REFRESH_SUCCESS_COUNT} 次)"
+    print(f"║  ⏱️  運行:  {_pad(refresh_info, W - 13)}║")
+    print(f"╠{'═' * W}╣")
+    
+    from services import targets
+    names = list(targets.get_target_names())
+    uids = list(targets.get_target_uids())
+    
+    tracking_title = f"[追蹤名單] (名稱: {len(names)}, UID: {len(uids)})"
+    print(f"║  {_pad(tracking_title, W - 2)}║")
+    
+    names_str = ", ".join(names) if names else "無"
+    uids_str = ", ".join(uids) if uids else "無"
+    
+    print(f"║  📛 名稱: {_pad(_truncate(names_str, W - 12), W - 12)}║")
+    print(f"║  🔑 UID:  {_pad(_truncate(uids_str, W - 12), W - 12)}║")
     print(f"╚{'═' * W}╝")
 
 
@@ -156,7 +158,8 @@ def _print_member_table(members):
         name_str = _pad(f" {display_name}", NAME_W)
 
         # 目標高亮 (保留內部使用 mid 來高亮的邏輯，但不再印出 mid)
-        if name == config.TARGET_NAME:
+        from services import targets
+        if targets.is_target(name, mid):
             print(f"     │{num_str}│{name_str}│ ← 🚨 目標！")
         else:
             print(f"     │{num_str}│{name_str}│")
@@ -169,8 +172,11 @@ def _print_member_table(members):
 # 主報告
 # ============================================================
 
-def print_status_report(cl, boot_time=None):
+def print_status_report(cl, boot_time=None, state=None):
     """印出完整的戰情看板，並導向至 logs/dashboard.txt"""
+    if state is None:
+        state = []
+        
     os.makedirs('logs', exist_ok=True)
     
     original_stdout = sys.stdout
@@ -179,70 +185,26 @@ def print_status_report(cl, boot_time=None):
     
     try:
         _print_header(cl, boot_time)
-        # 1. 取得群組 IDs
-        chat_res = cl.getAllChatMids()
-        gids = safe_get(chat_res, 'memberChatMids', 1)
-        if gids is None:
-            gids = chat_res
-        if not isinstance(gids, list):
-            gids = list(gids)
 
-        if not gids:
+        if not state:
             print("\n⚠️  目前機器人尚未加入任何群組！")
         else:
-            print(f"\n📊 防守中群組：{len(gids)} 個")
+            print(f"\n📊 防守中群組：{len(state)} 個")
             print("━" * 64)
 
-            # 2. 批次取得群組資料
-            try:
-                chats_res = cl.getChats(gids, withMembers=True)
-            except Exception:
-                chats_res = cl.getChats(gids)
-
-            chats = safe_get(chats_res, 'chats', 1)
-            if chats is None:
-                chats = chats_res
-            if not isinstance(chats, list):
-                chats = list(chats)
-
-            for i, chat in enumerate(chats, 1):
+            for i, group in enumerate(state, 1):
                 try:
-                    g_name = safe_get(chat, 'chatName', 6) or "未命名群組"
-
-                    # 解析成員 MID
-                    mids = []
-                    extra = safe_get(chat, 'extra', 8)
-                    group_extra = safe_get(extra, 'groupExtra', 1) if extra else None
-                    member_mids = safe_get(group_extra, 'memberMids', 4) if group_extra else None
-
-                    if isinstance(member_mids, dict):
-                        mids = list(member_mids.keys())
-                    elif isinstance(member_mids, list):
-                        mids = member_mids
-
-                    # Fallback: 暴力搜索法
-                    if not mids:
-                        mids = extract_all_user_mids(chat)
-
-                    # 先建立預設清單，名字全部預設為 "官方帳號 / 未知"
-                    members_dict = {str(m): "官方帳號 / 未知" for m in mids}
-
-                    if mids:
-                        contacts_res = cl.getContacts(mids)
-                        contacts = safe_get(contacts_res, 'contacts', 1)
-                        if contacts is None:
-                            contacts = contacts_res
-                        if not isinstance(contacts, list):
-                            contacts = list(contacts)
-
-                        for c in contacts:
-                            name = safe_get(c, 'displayName', 22)
-                            mid = safe_get(c, 'mid', 1) or safe_get(c, 'contactMid', 1)
-                            if mid and name:
-                                members_dict[str(mid)] = name
+                    g_name = group.get("group_name", "未命名群組")
+                    members_data = group.get("members", [])
+                    invitees_data = group.get("invitees", [])
+                    
+                    # 先建立 members_dict，包含 member 與 invitee
+                    members_dict = {}
+                    for u in members_data + invitees_data:
+                        members_dict[u["mid"]] = u["name"]
 
                     # 更新並載入 UID 歷史資料庫
-                    from uid_db import update_uid_db
+                    from services.uid_db import update_uid_db
                     db = update_uid_db(members_dict)
 
                     # 轉為 (name, history, mid) 格式

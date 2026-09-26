@@ -1,10 +1,11 @@
 # auth.py
 import os
 import time
-import config
-from logger import sys_log, error_log
+from core import config
+from core.logger import sys_log, error_log
 
 LAST_REFRESH_TIME = 0
+REFRESH_SUCCESS_COUNT = 0
 REFRESH_COOLDOWN = 300  # 5 分鐘冷卻，避免短時間內瘋狂重試（原本 12 小時太長）
 
 
@@ -140,7 +141,9 @@ def try_startup_refresh():
 
         _save_new_tokens(new_token, new_refresh)
 
+        global LAST_REFRESH_TIME, REFRESH_SUCCESS_COUNT
         LAST_REFRESH_TIME = time.time()
+        REFRESH_SUCCESS_COUNT += 1
         sys_log.info("✅ 啟動續命成功！已取得新 Access Token。")
         return new_token
 
@@ -197,6 +200,8 @@ def try_refresh_token(cl):
 
         _save_new_tokens(new_token, new_refresh)
 
+        global REFRESH_SUCCESS_COUNT
+        REFRESH_SUCCESS_COUNT += 1
         sys_log.info("✅ Token 自動續命成功！壽命已延長。")
         return True
 
